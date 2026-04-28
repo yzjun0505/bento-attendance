@@ -1,0 +1,8 @@
+- [x] MapDashboardScreen 能够秒开底部打卡面板（不论有无网络）
+- [x] MapDashboardScreen 底部操作区被大幅压缩，地图可视面积明显增大
+- [x] MapDashboardScreen 中“水印拍照”大按钮处于视觉中心主位
+- [x] MapDashboardScreen 中“上班打卡”和“下班打卡”变为体积更小的辅助按钮
+- [x] MapDashboardScreen 底部已移除“本地图库”和“更多打卡类型”
+- [x] 点击“上班打卡”或“下班打卡”能自动获取定位并直接上报，不会跳入拍照界面
+- [x] CameraCheckinScreen（水印相机界面）内已添加“本地图库”入口
+- [x] CameraCheckinScreen 内已增加对“更多打卡类型”的选择功能

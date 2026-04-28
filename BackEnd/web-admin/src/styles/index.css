@@ -1,0 +1,407 @@
+/* ==============================
+   全局样式 - 打卡管理系统
+   ============================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* 日间模式 (亮面现代蓝白) - 默认 */
+:root {
+  --bg-primary: #F4F7FB;
+  --bg-secondary: #FFFFFF;
+  --bg-card: rgba(255, 255, 255, 0.75);
+  --bg-card-hover: rgba(255, 255, 255, 0.95);
+  --bg-sidebar: transparent;
+  --border-color: rgba(0, 0, 0, 0.08);
+  --border-light: rgba(0, 0, 0, 0.04);
+  --text-primary: #1E293B;
+  --text-secondary: #64748B;
+  --text-muted: #94A3B8;
+  --accent-blue: #3b82f6;
+  --accent-green: #10b981;
+  --accent-orange: #f59e0b;
+  --accent-red: #ef4444;
+  --accent-purple: #8b5cf6;
+  --accent-cyan: #06b6d4;
+  --gradient-blue: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+  --gradient-green: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  --gradient-orange: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  --gradient-red: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  --gradient-purple: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.08);
+  --shadow-glow: 0 0 20px rgba(59, 130, 246, 0.15);
+  --radius-sm: 12px;
+  --radius-md: 20px;
+  --radius-lg: 28px;
+  --transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* 夜间模式 (深空底幕) */
+html.dark {
+  --bg-primary: #050508;
+  --bg-secondary: rgba(18, 20, 31, 0.6);
+  --bg-card: rgba(28, 30, 46, 0.45);
+  --bg-card-hover: rgba(38, 41, 64, 0.6);
+  --bg-sidebar: transparent;
+  --border-color: rgba(255, 255, 255, 0.06);
+  --border-light: rgba(255, 255, 255, 0.03);
+  --text-primary: #f1f3f5;
+  --text-secondary: #8b92a5;
+  --text-muted: #555b6e;
+  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-glow: 0 0 20px rgba(79, 140, 255, 0.1);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  height: 100%;
+  width: 100%;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+  background: var(--bg-primary);
+  background-image: radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.05), transparent 25%),
+                    radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.05), transparent 25%);
+  background-attachment: fixed;
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ==============================
+   Element Plus 暗色主题覆盖
+   ============================== */
+
+.el-menu {
+  border-right: none !important;
+  border-bottom: none !important;
+}
+
+/* 深色模式下的 Element Plus 输入框定制（去白光割裂与刺眼边框） */
+html.dark .el-input__wrapper,
+html.dark .el-select__wrapper,
+html.dark .el-textarea__inner {
+  background-color: rgba(255, 255, 255, 0.03) !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset !important;
+  color: var(--text-primary) !important;
+  transition: var(--transition);
+}
+
+html.dark .el-input__wrapper:hover,
+html.dark .el-select__wrapper:hover,
+html.dark .el-textarea__inner:hover,
+html.dark .el-input__wrapper.is-focus,
+html.dark .el-select__wrapper.is-focused,
+html.dark .el-textarea__inner:focus {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 0 0 1px var(--accent-blue) inset !important;
+}
+
+html.dark .el-date-editor {
+  --el-input-bg-color: transparent !important;
+  --el-input-border-color: rgba(255, 255, 255, 0.08) !important;
+  --el-input-hover-border-color: var(--accent-blue) !important;
+  --el-input-focus-border-color: var(--accent-blue) !important;
+}
+
+/* 深度定制表格：消除割裂感，实现无缝融入背景 */
+.el-table {
+  --el-table-bg-color: transparent !important;
+  --el-table-tr-bg-color: transparent !important;
+  --el-table-header-bg-color: var(--border-light) !important;
+  --el-table-row-hover-bg-color: var(--border-light) !important;
+  --el-table-border-color: var(--border-color) !important;
+  --el-table-text-color: var(--text-primary) !important;
+  --el-table-header-text-color: var(--text-secondary) !important;
+  background-color: transparent !important;
+}
+
+/* 去除多余的边线 */
+.el-table__inner-wrapper::before,
+.el-table::before,
+.el-table::after {
+  display: none !important;
+}
+
+.el-table th.el-table__cell.is-leaf {
+  border-bottom: 1px solid var(--border-color) !important;
+  font-weight: 600;
+}
+
+.el-table td.el-table__cell {
+  border-bottom: 1px solid var(--border-light) !important;
+}
+
+/* 极简无感滚动条和空数据态 */
+.el-table__empty-block {
+  background-color: transparent !important;
+}
+
+/* 分页器暗夜模式适配 */
+.pagination-wrapper {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+  width: 100%;
+}
+
+.el-pagination {
+  --el-pagination-bg-color: transparent;
+  --el-pagination-button-disabled-bg-color: transparent;
+  --el-pagination-hover-color: var(--accent-blue);
+  justify-content: flex-end;
+}
+.el-pagination.is-background .btn-next,
+.el-pagination.is-background .btn-prev,
+.el-pagination.is-background .el-pager li {
+  background-color: rgba(255, 255, 255, 0.03) !important;
+  color: var(--text-secondary) !important;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.el-pagination.is-background .el-pager li.is-active {
+  background-color: rgba(79, 140, 255, 0.15) !important;
+  color: var(--accent-blue) !important;
+  border-color: rgba(79, 140, 255, 0.3);
+}
+
+/* 卡片统一样式 */
+.stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  transition: var(--transition);
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+}
+
+.stat-card.blue::before { background: var(--gradient-blue); }
+.stat-card.green::before { background: var(--gradient-green); }
+.stat-card.orange::before { background: var(--gradient-orange); }
+.stat-card.red::before { background: var(--gradient-red); }
+.stat-card.purple::before { background: var(--gradient-purple); }
+
+.stat-card .stat-value {
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  margin: 8px 0 4px;
+}
+
+.stat-card .stat-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.stat-card .stat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
+
+.stat-card .stat-icon.blue { background: rgba(79, 140, 255, 0.15); color: var(--accent-blue); }
+.stat-card .stat-icon.green { background: rgba(52, 211, 153, 0.15); color: var(--accent-green); }
+.stat-card .stat-icon.orange { background: rgba(251, 146, 60, 0.15); color: var(--accent-orange); }
+.stat-card .stat-icon.red { background: rgba(248, 113, 113, 0.15); color: var(--accent-red); }
+.stat-card .stat-icon.purple { background: rgba(167, 139, 250, 0.15); color: var(--accent-purple); }
+
+/* Bento 卡片通用容器 */
+.module-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+  transition: var(--transition);
+  position: relative;
+  overflow: hidden;
+}
+
+.module-card:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* 页面容器 (顶部导航模式适配) */
+.page-container {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 100px 32px 32px;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.page-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.3px;
+}
+
+.page-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+/* 搜索筛选栏 */
+.filter-bar {
+  background: var(--bg-card);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin-bottom: 0; /* page-container now handles gap */
+}
+
+/* 表格容器 */
+.table-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  padding: 24px 0 0; /* space around table */
+}
+
+/* 页面顶部标题独立成玻璃控制台 */
+.page-header {
+  background: var(--bg-card);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 24px 32px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0;
+}
+
+/* 统计行 */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+/* 玻璃态效果 */
+.glass {
+  background: rgba(28, 30, 46, 0.7);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border-color);
+}
+
+/* 动画 */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in-up {
+  animation: fadeInUp 0.5s ease-out;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.pulse {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* 在线状态指示器 */
+.online-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-green);
+  display: inline-block;
+  margin-right: 6px;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.offline-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  display: inline-block;
+  margin-right: 6px;
+}
+
+/* 角色标签颜色 */
+.role-admin { color: var(--accent-red); background: rgba(248, 113, 113, 0.12); }
+.role-manager { color: var(--accent-blue); background: rgba(79, 140, 255, 0.12); }
+.role-worker { color: var(--accent-green); background: rgba(52, 211, 153, 0.12); }
+
+/* 滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}

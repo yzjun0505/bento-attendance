@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="多端协同打卡人员实时移动管理系统 - Web管理端" />
+    <title>打卡管理系统</title>
+    <!-- 高德地图API配置 - 安全密钥必须最先加载 -->
+    <script type="text/javascript">
+        window._AMapSecurityConfig = {
+            securityJsCode: 'c673cb06b1823f9e290ab592a2eaadd7',
+        }
+    </script>
+    <!-- 高德地图 JS API 2.0 -->
+    <script src="https://webapi.amap.com/maps?v=2.0&key=your_amap_web_key_here&plugin=AMap.PlaceSearch,AMap.CitySearch,AMap.Scale,AMap.ToolBar"></script>
+    <script>
+      (function() {
+        var savedTheme = localStorage.getItem('theme-dark');
+        if (savedTheme !== 'false') {
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

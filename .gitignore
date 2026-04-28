@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+vendor/
+.pods/
+
+# Build outputs
+build/
+dist/
+*.apk
+*.ipa
+
+# Environment variables (sensitive info)
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Flutter
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+.dart_tool/
+
+# iOS/Android build
+MobileApp/ios/Pods/
+MobileApp/android/.gradle/
+MobileApp/android/app/debug/
+MobileApp/android/app/profile/
+MobileApp/android/app/release/
+
+# Test coverage
+coverage/
