@@ -3,7 +3,6 @@ import '../../core/bento_colors.dart';
 import '../../core/bento_typography.dart';
 import '../../widgets/bento_widgets.dart';
 import '../../services/openim_service.dart' as im_service;
-import '../../repositories/contact_remark_repository.dart';
 import 'chat_screen.dart';
 
 class ConversationListScreen extends StatefulWidget {
@@ -16,19 +15,15 @@ class ConversationListScreen extends StatefulWidget {
 class _ConversationListScreenState extends State<ConversationListScreen> {
   int _currentTab = 0;
   final _imService = im_service.OpenIMService();
-  final _remarkRepo = ContactRemarkRepository();
 
   List<dynamic> _conversations = [];
   List<dynamic> _friends = [];
   List<dynamic> _groups = [];
   bool _isLoading = true;
-  Map<String, String> _remarks = {};
-  Map<String, String> _customAvatars = {};
 
   @override
   void initState() {
     super.initState();
-    _loadRemarksAndAvatars();
     _loadData();
 
     // 监听 IM 登陆状态变化
@@ -40,29 +35,32 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   }
 
   Future<void> _loadData() async {
-    // 立即清除 loading 状态，如果未登录直接返回
-    if (!mounted) return;
-    
-    // 如果 IM 还没有初始化完成，我们不用死等，先结束 loading 渲染一个空列表或骨架屏
-    // 当 _imService.connectionStream 回调 connected 时会自动再调一次 _loadData()
+    // 等待 IM 初始化和登陆完成
+    int retries = 0;
+    while (!_imService.isLoggedIn && retries < 30) {
+      await Future.delayed(const Duration(milliseconds: 200));
+      retries++;
+    }
+
+    setState(() {
+      _isLoading = false;
+    });
+
     if (!_imService.isLoggedIn) {
-      setState(() => _isLoading = false);
+      print('IM 未登陆，请重新登陆');
       return;
     }
 
     try {
-      // 并发请求
-      final results = await Future.wait([
-        _imService.getAllConversations(),
-        _imService.getFriendList(),
-        _imService.getJoinedGroupList(),
-      ]);
+      final conversations = await _imService.getAllConversations();
+      final friends = await _imService.getFriendList();
+      final groups = await _imService.getJoinedGroupList();
 
       if (mounted) {
         setState(() {
-          _conversations = results[0] as List<dynamic>;
-          _friends = results[1] as List<dynamic>;
-          _groups = results[2] as List<dynamic>;
+          _conversations = conversations;
+          _friends = friends;
+          _groups = groups;
           _isLoading = false;
         });
       }
@@ -72,48 +70,6 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
         setState(() => _isLoading = false);
       }
     }
-  }
-
-  Future<void> _loadRemarksAndAvatars() async {
-    final m = await _remarkRepo.readAll();
-    final a = await _remarkRepo.readAllAvatars();
-    if (!mounted) return;
-    setState(() {
-      _remarks = m;
-      _customAvatars = a;
-    });
-  }
-
-  String _remarkKey({required bool isGroup, required String? userId, required String? groupId}) {
-    return isGroup ? 'g_${groupId ?? ''}' : 'u_${userId ?? ''}';
-  }
-
-  Future<void> _editRemark({required String key, required String currentName}) async {
-    final controller = TextEditingController(text: _remarks[key] ?? '');
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) {
-        final colors = ctx.colors;
-        final theme = Theme.of(ctx);
-        return AlertDialog(
-          backgroundColor: colors.surface,
-          title: Text('设置备注', style: theme.textTheme.titleMedium),
-          content: TextField(
-            controller: controller,
-            decoration: const InputDecoration(hintText: '请输入备注'),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('保存')),
-          ],
-        );
-      },
-    );
-    if (ok != true) return;
-    await _remarkRepo.setRemark(key, controller.text);
-    await _loadRemarksAndAvatars();
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已保存：${controller.text.trim().isEmpty ? currentName : controller.text.trim()}')));
   }
 
   @override
@@ -254,16 +210,8 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   Widget _buildConversationItem(
       dynamic conv, BentoColors colors, ThemeData theme) {
     final isGroup = conv.groupID != null && conv.groupID!.isNotEmpty;
-    final key = _remarkKey(isGroup: isGroup, userId: conv.userID, groupId: conv.groupID);
-    final baseName = conv.showName ?? (isGroup ? '群聊' : '用户');
-    final name = _remarks[key]?.isNotEmpty == true ? _remarks[key]! : baseName;
-    String? faceUrl;
-    try {
-      faceUrl = _customAvatars[key]?.isNotEmpty == true ? _customAvatars[key] : conv.faceURL as String?;
-    } catch (_) {
-      faceUrl = null;
-    }
-    final lastMsg = _imService.getMessageDigest(conv.latestMsg);
+    final name = conv.showName ?? (isGroup ? '群聊' : '用户');
+    final lastMsg = conv.latestMsg?.textElem?.content ?? '';
     final unreadCount = conv.unreadCount ?? 0;
     final time = conv.latestMsgSendTime != null
         ? _formatTime(conv.latestMsgSendTime)
@@ -279,35 +227,9 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
               name: name,
               isGroup: isGroup,
               receiverId: isGroup ? conv.groupID : conv.userID,
-              faceUrl: faceUrl,
             ),
           ),
         ).then((_) => _loadData());
-      },
-      onLongPressStart: (d) {
-        final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-        final size = overlay.size;
-        final x = d.globalPosition.dx;
-        final y = d.globalPosition.dy;
-        final position = RelativeRect.fromLTRB(x, y, size.width - x, size.height - y);
-        showMenu<String>(
-          context: context,
-          position: position,
-          color: colors.surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          items: const [
-            PopupMenuItem(value: 'remark', child: Text('设置备注')),
-            PopupMenuItem(value: 'clear', child: Text('清除备注')),
-          ],
-        ).then((action) async {
-          if (!mounted || action == null) return;
-          if (action == 'remark') {
-            await _editRemark(key: key, currentName: baseName);
-          } else if (action == 'clear') {
-            await _remarkRepo.setRemark(key, '');
-            await _loadRemarksAndAvatars();
-          }
-        });
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: BentoSpacing.space8),
@@ -327,7 +249,6 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
           children: [
             BentoAvatar(
               size: 48,
-              imageUrl: faceUrl,
               text: name,
               backgroundColor:
                   isGroup ? colors.secondaryLight : colors.primaryLight,
@@ -424,35 +345,21 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
 
   Widget _buildContactItem(
       dynamic friend, BentoColors colors, ThemeData theme) {
-    final baseName = friend.nickname ?? friend.userID ?? '用户';
-    final key = _remarkKey(isGroup: false, userId: friend.userID, groupId: null);
-    final name = _remarks[key]?.isNotEmpty == true ? _remarks[key]! : baseName;
-    String? faceUrl;
-    try {
-      faceUrl = _customAvatars[key]?.isNotEmpty == true ? _customAvatars[key] : friend.faceURL as String?;
-    } catch (_) {
-      faceUrl = null;
-    }
+    final name = friend.nickname ?? friend.userID ?? '用户';
 
     return GestureDetector(
       onTap: () {
-        () async {
-          final conversationID = await _imService.getOrCreateSingleConversationID(friend.userID);
-          if (!context.mounted || conversationID == null || conversationID.isEmpty) return;
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ChatScreen(
-                conversationId: conversationID,
-                name: name,
-                isGroup: false,
-                receiverId: friend.userID,
-                faceUrl: faceUrl,
-              ),
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatScreen(
+              conversationId: 'single_${friend.userID}',
+              name: name,
+              isGroup: false,
+              receiverId: friend.userID,
             ),
-          );
-          _loadData();
-        }();
+          ),
+        ).then((_) => _loadData());
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: BentoSpacing.space8),
@@ -465,7 +372,6 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
           children: [
             BentoAvatar(
               size: 44,
-              imageUrl: faceUrl,
               text: name,
               backgroundColor: colors.primaryLight,
               textColor: colors.primary,
@@ -511,39 +417,22 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
   }
 
   Widget _buildGroupItem(dynamic group, BentoColors colors, ThemeData theme) {
-    final baseName = group.groupName ?? '群聊';
-    final key = _remarkKey(isGroup: true, userId: null, groupId: group.groupID);
-    final name = _remarks[key]?.isNotEmpty == true ? _remarks[key]! : baseName;
-    String? faceUrl;
-    try {
-      faceUrl = _customAvatars[key]?.isNotEmpty == true ? _customAvatars[key] : group.faceURL as String?;
-    } catch (_) {
-      faceUrl = null;
-    }
+    final name = group.groupName ?? '群聊';
     final memberCount = group.memberCount ?? 0;
 
     return GestureDetector(
       onTap: () {
-        () async {
-          final conversationID = await _imService.getOrCreateGroupConversationID(
-            group.groupID,
-            sessionType: group.sessionType,
-          );
-          if (!context.mounted || conversationID == null || conversationID.isEmpty) return;
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ChatScreen(
-                conversationId: conversationID,
-                name: name,
-                isGroup: true,
-                receiverId: group.groupID,
-                faceUrl: faceUrl,
-              ),
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatScreen(
+              conversationId: 'group_${group.groupID}',
+              name: name,
+              isGroup: true,
+              receiverId: group.groupID,
             ),
-          );
-          _loadData();
-        }();
+          ),
+        ).then((_) => _loadData());
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: BentoSpacing.space8),
@@ -554,31 +443,35 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
         ),
         child: Row(
           children: [
-            BentoAvatar(
-              size: 48,
-              imageUrl: faceUrl,
-              text: name,
-              backgroundColor: colors.secondaryLight,
-              textColor: colors.secondary,
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: colors.secondaryLight,
+                borderRadius: BorderRadius.circular(BentoRadius.md),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.group, color: colors.secondary, size: 20),
+                  Text(
+                    '$memberCount人',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: colors.secondary,
+                      fontSize: 9,
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(width: BentoSpacing.space12),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      color: colors.textPrimary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '$memberCount人',
-                    style: theme.textTheme.labelSmall?.copyWith(color: colors.textSecondary),
-                  ),
-                ],
+              child: Text(
+                name,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: colors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
             Icon(

@@ -31,14 +31,13 @@ function monitorPool() {
  */
 function getPool() {
   if (!pool) {
-    pool = mysql.createPool({
+      pool = mysql.createPool({
       ...config.db,
-      timezone: 'Z',
-      dateStrings: false,
+      // 不设 timezone，让 mysql2 自动检测 MySQL 服务器时区（本机 CST/北京时间）
+      // 之前 timezone:'Z' 错误地告诉驱动数据库存的是 UTC，导致所有 DATETIME 偏移 8 小时
+      dateStrings: true,
       // 连接超时配置（TiDB Cloud 公网连接需要更长的超时）
       connectTimeout: 30000,      // 30秒连接超时
-      acquireTimeout: 30000,      // 获取连接超时
-      timeout: 30000,             // 查询超时
       enableKeepAlive: true,      // 保持 TCP 连接
       keepAliveInitialDelay: 10000,
     });
@@ -75,8 +74,7 @@ async function initDatabase() {
   const tempConn = await mysql.createConnection({
     ...config.db,
     database: undefined, // 初始化建库时不需要指定数据库名
-    timezone: 'Z',
-    dateStrings: false,
+    dateStrings: true,
     connectTimeout: 30000,
   });
 
@@ -230,6 +228,28 @@ async function initDatabase() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
+  // 创建离线打卡缓存表（无网络时本地缓存，有网后同步）
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS offline_checkins (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL COMMENT '用户ID',
+      type VARCHAR(50) NOT NULL COMMENT '打卡类型',
+      latitude DOUBLE DEFAULT NULL,
+      longitude DOUBLE DEFAULT NULL,
+      address VARCHAR(500) DEFAULT '',
+      photo VARCHAR(500) DEFAULT '',
+      remark VARCHAR(500) DEFAULT '',
+      project_id INT DEFAULT NULL,
+      local_timestamp DATETIME NOT NULL COMMENT '设备本地打卡时间',
+      synced TINYINT DEFAULT 0 COMMENT '是否已同步(1是/0否)',
+      sync_time DATETIME DEFAULT NULL COMMENT '同步时间',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      INDEX idx_user_synced (user_id, synced),
+      INDEX idx_created (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
   // 创建设备管理表
   await db.execute(`
     CREATE TABLE IF NOT EXISTS devices (
@@ -326,23 +346,87 @@ async function initDatabase() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
+  // 创建班次表（支持多班次：早班、晚班、轮班等）
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS shifts (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(100) NOT NULL COMMENT '班次名称（如：早班、晚班、夜班）',
+      start_time TIME NOT NULL COMMENT '上班时间',
+      end_time TIME NOT NULL COMMENT '下班时间',
+      late_tolerance INT DEFAULT 15 COMMENT '允许迟到分钟数',
+      early_leave_tolerance INT DEFAULT 15 COMMENT '允许早退分钟数',
+      color VARCHAR(20) DEFAULT '#3B82F6' COMMENT '班次颜色标识',
+      sort_order INT DEFAULT 0 COMMENT '排序',
+      status TINYINT DEFAULT 1 COMMENT '状态(1启用/0停用)',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  // 初始化默认班次
+  const [shiftRows] = await db.execute('SELECT count(*) as count FROM shifts');
+  if (shiftRows[0].count === 0) {
+    await db.execute(`
+      INSERT INTO shifts (name, start_time, end_time, late_tolerance, early_leave_tolerance, color, sort_order) VALUES
+      ('白班', '08:00:00', '17:00:00', 15, 15, '#22C55E', 1),
+      ('早班', '06:00:00', '14:00:00', 15, 15, '#3B82F6', 2),
+      ('晚班', '14:00:00', '22:00:00', 15, 15, '#F59E0B', 3),
+      ('夜班', '22:00:00', '06:00:00', 15, 15, '#8B5CF6', 4)
+    `);
+    logger.info('已初始化默认班次数据');
+  }
+
+  // 创建排班表（用户-日期-班次关联）
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS user_schedules (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL COMMENT '用户ID',
+      date DATE NOT NULL COMMENT '排班日期',
+      shift_id INT NOT NULL COMMENT '班次ID',
+      is_rest TINYINT DEFAULT 0 COMMENT '是否休息(1是/0否)',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (shift_id) REFERENCES shifts(id) ON DELETE CASCADE,
+      UNIQUE KEY uk_user_date (user_id, date),
+      INDEX idx_date (date),
+      INDEX idx_user_id (user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
   // 创建考勤结果表
   await db.execute(`
     CREATE TABLE IF NOT EXISTS attendance_results (
       id INT AUTO_INCREMENT PRIMARY KEY,
       user_id INT NOT NULL COMMENT '用户ID',
       date DATE NOT NULL COMMENT '考勤日期',
-      status ENUM('normal', 'late', 'early_leave', 'absent', 'leave') NOT NULL DEFAULT 'absent' COMMENT '考勤状态',
+      status ENUM('normal', 'late', 'early_leave', 'absent', 'leave', 'holiday', 'rest') NOT NULL DEFAULT 'absent' COMMENT '考勤状态',
       checkin_time TIME DEFAULT NULL COMMENT '上班打卡时间',
       checkout_time TIME DEFAULT NULL COMMENT '下班打卡时间',
+      shift_id INT DEFAULT NULL COMMENT '班次ID',
       group_id INT DEFAULT NULL COMMENT '考勤组ID',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (shift_id) REFERENCES shifts(id) ON DELETE SET NULL,
       FOREIGN KEY (group_id) REFERENCES attendance_groups(id) ON DELETE SET NULL,
       UNIQUE KEY uk_user_date (user_id, date),
       INDEX idx_date (date),
       INDEX idx_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  // 创建节假日表
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS holidays (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(100) NOT NULL COMMENT '节假日名称',
+      date DATE NOT NULL COMMENT '日期',
+      type ENUM('holiday', 'workday') NOT NULL DEFAULT 'holiday' COMMENT '类型：holiday放假, workday调休上班',
+      year INT NOT NULL COMMENT '年份',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_date (date),
+      INDEX idx_year (year)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 

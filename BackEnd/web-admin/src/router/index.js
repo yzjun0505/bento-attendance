@@ -71,6 +71,36 @@ const routes = [
         name: 'AntiFakeQuery',
         component: () => import('@/views/AntiFakeQuery.vue'),
         meta: { title: '防伪码查询', icon: 'Search' }
+      },
+      {
+        path: 'shifts',
+        name: 'Shifts',
+        component: () => import('@/views/Shifts.vue'),
+        meta: { title: '班次管理', icon: 'AlarmClock' }
+      },
+      {
+        path: 'schedules',
+        name: 'Schedules',
+        component: () => import('@/views/Schedules.vue'),
+        meta: { title: '排班管理', icon: 'Calendar' }
+      },
+      {
+        path: 'holidays',
+        name: 'Holidays',
+        component: () => import('@/views/Holidays.vue'),
+        meta: { title: '节假日管理', icon: 'CollectionTag' }
+      },
+      {
+        path: 'offline-checkins',
+        name: 'OfflineCheckins',
+        component: () => import('@/views/OfflineCheckins.vue'),
+        meta: { title: '离线打卡记录', icon: 'Connection' }
+      },
+      {
+        path: 'tracks',
+        name: 'Tracks',
+        component: () => import('@/views/Tracks.vue'),
+        meta: { title: '轨迹回放', icon: 'MapLocation' }
       }
     ]
   }
@@ -81,7 +111,6 @@ const router = createRouter({
   routes
 })
 
-// 路由守卫
 router.beforeEach((to, from, next) => {
   document.title = `${to.meta.title || '管理系统'} - 打卡管理系统`
   const token = localStorage.getItem('token')

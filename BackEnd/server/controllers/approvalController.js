@@ -3,6 +3,7 @@
  */
 const { getPool } = require('../models/db');
 const { successResponse, errorResponse, parsePagination } = require('../utils/helpers');
+const logger = require('../utils/logger');
 
 const APPROVAL_TYPES = ['补卡', '请假', '加班'];
 const APPROVAL_STATUS = ['pending', 'approved', 'rejected'];
@@ -28,7 +29,7 @@ async function createApproval(req, res) {
 
     res.json(successResponse({ id: result.insertId }, '申请提交成功'));
   } catch (err) {
-    console.error('创建审批申请失败:', err);
+    logger.error('创建审批申请失败', { error: err.message });
     res.status(500).json(errorResponse('服务器错误'));
   }
 }
@@ -57,7 +58,7 @@ async function getPendingApprovals(req, res) {
 
     res.json(successResponse({ list: rows, total, page, pageSize }));
   } catch (err) {
-    console.error('获取待审批列表失败:', err);
+    logger.error('获取待审批列表失败', { error: err.message });
     res.status(500).json(errorResponse('服务器错误'));
   }
 }
@@ -86,7 +87,7 @@ async function getMyApprovals(req, res) {
 
     res.json(successResponse({ list: rows, total, page, pageSize }));
   } catch (err) {
-    console.error('获取我的申请列表失败:', err);
+    logger.error('获取我的申请列表失败', { error: err.message });
     res.status(500).json(errorResponse('服务器错误'));
   }
 }
@@ -129,7 +130,7 @@ async function getAllApprovals(req, res) {
 
     res.json(successResponse({ list: rows, total, page, pageSize }));
   } catch (err) {
-    console.error('获取审批列表失败:', err);
+    logger.error('获取审批列表失败', { error: err.message });
     res.status(500).json(errorResponse('服务器错误'));
   }
 }
@@ -160,53 +161,90 @@ async function approveApproval(req, res) {
       ['approved', approver_id, remark || null, approvalId]
     );
 
+    // 审批通过后联动考勤结果
     if (approval.type === '补卡') {
-      const dateStr = new Date(approval.start_date).toISOString().slice(0, 10);
-      const [existing] = await db.execute(
-        'SELECT id FROM attendance_results WHERE user_id = ? AND date = ?',
-        [approval.user_id, dateStr]
-      );
-
-      if (existing.length > 0) {
-        await db.execute(
-          'UPDATE attendance_results SET status = ? WHERE id = ?',
-          ['normal', existing[0].id]
-        );
-      } else {
-        await db.execute(
-          'INSERT INTO attendance_results (user_id, date, status) VALUES (?, ?, ?)',
-          [approval.user_id, dateStr, 'normal']
-        );
-      }
+      const dateStr = formatLocalDate(approval.start_date);
+      await upsertAttendanceResult(db, approval.user_id, dateStr, 'normal');
     } else if (approval.type === '请假') {
-      const startDate = new Date(approval.start_date);
-      const endDate = approval.end_date ? new Date(approval.end_date) : startDate;
+      const startDate = new Date(approval.start_date + 'T00:00:00');
+      const endDate = approval.end_date ? new Date(approval.end_date + 'T00:00:00') : startDate;
 
       for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-        const dateStr = d.toISOString().slice(0, 10);
-        const [existing] = await db.execute(
-          'SELECT id FROM attendance_results WHERE user_id = ? AND date = ?',
-          [approval.user_id, dateStr]
-        );
+        const dateStr = formatLocalDate(d);
+        await upsertAttendanceResult(db, approval.user_id, dateStr, 'leave');
+      }
+    } else if (approval.type === '加班') {
+      // 加班审批通过后，标记对应日期有加班记录
+      const startDate = new Date(approval.start_date + 'T00:00:00');
+      const endDate = approval.end_date ? new Date(approval.end_date + 'T00:00:00') : startDate;
 
-        if (existing.length > 0) {
-          await db.execute(
-            'UPDATE attendance_results SET status = ? WHERE id = ?',
-            ['leave', existing[0].id]
-          );
-        } else {
-          await db.execute(
-            'INSERT INTO attendance_results (user_id, date, status) VALUES (?, ?, ?)',
-            [approval.user_id, dateStr, 'leave']
-          );
-        }
+      for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+        const dateStr = formatLocalDate(d);
+        // 加班不影响正常考勤状态，但记录加班标记
+        await upsertAttendanceResult(db, approval.user_id, dateStr, null, { overtime: true });
       }
     }
 
     res.json(successResponse(null, '审批通过'));
   } catch (err) {
-    console.error('审批通过失败:', err);
+    logger.error('审批通过失败', { error: err.message, approvalId });
     res.status(500).json(errorResponse('服务器错误'));
+  }
+}
+
+/**
+ * 格式化日期为本地时间字符串 YYYY-MM-DD
+ */
+function formatLocalDate(dateInput) {
+  const d = new Date(dateInput);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * 插入或更新考勤结果
+ */
+async function upsertAttendanceResult(db, userId, date, status, extra = {}) {
+  const [existing] = await db.execute(
+    'SELECT id, status FROM attendance_results WHERE user_id = ? AND date = ?',
+    [userId, date]
+  );
+
+  if (existing.length > 0) {
+    const updates = [];
+    const params = [];
+    if (status) {
+      updates.push('status = ?');
+      params.push(status);
+    }
+    if (extra.overtime) {
+      updates.push('overtime = ?');
+      params.push(1);
+    }
+    if (updates.length > 0) {
+      params.push(existing[0].id);
+      await db.execute(`UPDATE attendance_results SET ${updates.join(', ')} WHERE id = ?`, params);
+    }
+  } else {
+    const fields = ['user_id', 'date'];
+    const placeholders = ['?', '?'];
+    const values = [userId, date];
+    if (status) {
+      fields.push('status');
+      placeholders.push('?');
+      values.push(status);
+    }
+    if (extra.overtime) {
+      fields.push('overtime');
+      placeholders.push('?');
+      values.push(1);
+    }
+    await db.execute(
+      `INSERT INTO attendance_results (${fields.join(', ')}) VALUES (${placeholders.join(', ')})`,
+      values
+    );
   }
 }
 
@@ -238,7 +276,7 @@ async function rejectApproval(req, res) {
 
     res.json(successResponse(null, '审批已驳回'));
   } catch (err) {
-    console.error('审批驳回失败:', err);
+    logger.error('审批驳回失败', { error: err.message });
     res.status(500).json(errorResponse('服务器错误'));
   }
 }
@@ -266,7 +304,7 @@ async function deleteApproval(req, res) {
 
     res.json(successResponse(null, '审批单已删除'));
   } catch (err) {
-    console.error('删除审批单失败:', err);
+    logger.error('删除审批单失败', { error: err.message });
     res.status(500).json(errorResponse('服务器错误'));
   }
 }

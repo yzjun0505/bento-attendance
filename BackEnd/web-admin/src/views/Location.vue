@@ -493,7 +493,8 @@ function focusDevice(d) {
 // ---- 工具函数 ----
 function formatTime(t) {
   if (!t) return ''
-  const d = new Date(t)
+  // 后端返回本地时间字符串，替换空格为T确保浏览器按本地时间解析
+  const d = new Date(typeof t === 'string' ? t.replace(' ', 'T') : t)
   return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
 }
 

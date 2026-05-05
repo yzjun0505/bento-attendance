@@ -311,7 +311,7 @@ class _ApprovalListScreenState extends State<ApprovalListScreen>
       await _approvalRepo.approve(approval['id'], token: token);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('审批通过')),
+        const SnackBar(content: Text('审批已通过，考勤记录已更新')),
       );
       _loadData();
     } catch (e) {

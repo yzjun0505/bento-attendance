@@ -333,7 +333,8 @@ const distributionOption = computed(() => {
 
 function formatTime(time) {
   if (!time) return ''
-  const d = new Date(time)
+  // 后端返回本地时间字符串，替换空格为T确保浏览器按本地时间解析
+  const d = new Date(typeof time === 'string' ? time.replace(' ', 'T') : time)
   const pad = n => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }

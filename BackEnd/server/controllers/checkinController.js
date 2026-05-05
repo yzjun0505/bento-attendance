@@ -205,11 +205,11 @@ async function getCheckins(req, res) {
     }
     if (date_start) {
       where += ' AND c.created_at >= ?';
-      params.push(new Date(date_start));
+      params.push(date_start);
     }
     if (date_end) {
       where += ' AND c.created_at <= ?';
-      params.push(new Date(date_end));
+      params.push(date_end);
     }
     if (is_outside !== undefined && is_outside !== '') {
       where += ' AND c.is_outside = ?';
@@ -437,11 +437,11 @@ async function exportCheckins(req, res) {
     }
     if (date_start) {
       where += ' AND c.created_at >= ?';
-      params.push(new Date(date_start));
+      params.push(date_start);
     }
     if (date_end) {
       where += ' AND c.created_at <= ?';
-      params.push(new Date(date_end));
+      params.push(date_end);
     }
     if (is_outside !== undefined && is_outside !== '') {
       where += ' AND c.is_outside = ?';

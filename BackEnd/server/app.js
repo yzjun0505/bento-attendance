@@ -28,7 +28,13 @@ const notificationRoutes = require('./routes/notifications');
 const dashboardRoutes = require('./routes/dashboard');
 const attendanceGroupRoutes = require('./routes/attendanceGroups');
 const checkinTypeRoutes = require('./routes/checkinTypes');
+const shiftRoutes = require('./routes/shifts');
+const scheduleRoutes = require('./routes/schedules');
+const holidayRoutes = require('./routes/holidays');
+const offlineCheckinRoutes = require('./routes/offlineCheckins');
+const trackRoutes = require('./routes/tracks');
 
+const approvalRoutes = require('./routes/approvals');
 const sessionsRoutes = require('./routes/sessions');
 const imRoutes = require('./routes/im');
 
@@ -90,7 +96,13 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/attendance-groups', attendanceGroupRoutes);
 app.use('/api/checkin-types', checkinTypeRoutes);
+app.use('/api/shifts', shiftRoutes);
+app.use('/api/schedules', scheduleRoutes);
+app.use('/api/holidays', holidayRoutes);
+app.use('/api/offline-checkins', offlineCheckinRoutes);
+app.use('/api/tracks', trackRoutes);
 
+app.use('/api/approvals', approvalRoutes);
 app.use('/api/sessions', sessionsRoutes);
 app.use('/api/im', imRoutes);
 
@@ -127,15 +139,17 @@ app.get('/api/health', async (req, res) => {
   });
 });
 
-// SPA 路由回退 — 所有非 API 请求返回 index.html
-app.get('*', (req, res) => {
-  const distIndex = path.join(__dirname, '../dist/index.html');
-  res.sendFile(distIndex, (err) => {
-    if (err) {
-      res.status(404).json({ code: 404, message: '页面不存在' });
-    }
+// SPA 路由回退 — 所有非 API 请求返回 index.html（测试环境跳过）
+if (process.env.NODE_ENV !== 'test') {
+  app.get('*', (req, res) => {
+    const distIndex = path.join(__dirname, '../dist/index.html');
+    res.sendFile(distIndex, (err) => {
+      if (err) {
+        res.status(404).json({ code: 404, message: '页面不存在' });
+      }
+    });
   });
-});
+}
 
 // ========================
 // Socket.IO 事件
@@ -225,4 +239,10 @@ async function start() {
   }
 }
 
-start();
+// 导出 app 供测试使用
+module.exports = { app, server, start };
+
+// 非测试环境直接启动
+if (process.env.NODE_ENV !== 'test') {
+  start();
+}

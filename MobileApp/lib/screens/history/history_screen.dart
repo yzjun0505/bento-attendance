@@ -11,6 +11,7 @@ import '../../core/bento_colors.dart';
 import '../../core/bento_typography.dart';
 import '../../widgets/bento_widgets.dart';
 import '../../models/checkin_model.dart';
+import '../track/track_screen.dart';
 
 class HistoryScreen extends StatelessWidget {
   const HistoryScreen({super.key});
@@ -184,7 +185,7 @@ class HistoryScreen extends StatelessWidget {
                           delegate: SliverChildBuilderDelegate(
                             (context, index) {
                               final item = history[index];
-                              return _buildHistoryItem(item, colors, theme);
+                              return _buildHistoryItem(context, item, colors, theme);
                             },
                             childCount: history.length,
                           ),
@@ -339,7 +340,7 @@ class HistoryScreen extends StatelessWidget {
   }
 
   /// 明细列表项
-  Widget _buildHistoryItem(Checkin item, BentoColors colors, ThemeData theme) {
+  Widget _buildHistoryItem(BuildContext context, Checkin item, BentoColors colors, ThemeData theme) {
     final type = item.type ?? '';
     final isOutside = item.isOutside == true;
 
@@ -464,6 +465,27 @@ class HistoryScreen extends StatelessWidget {
             // 围栏外标记
             if (isOutside)
               const BentoBadge.warning(text: '围栏外'),
+            // 查看轨迹按钮
+            const SizedBox(width: 4),
+            GestureDetector(
+              onTap: () {
+                final date = item.createdAt.toIso8601String().split('T')[0];
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => TrackScreen(initialDate: date),
+                  ),
+                );
+              },
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: colors.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Icon(Icons.route, size: 16, color: colors.primary),
+              ),
+            ),
           ],
         ),
       ),

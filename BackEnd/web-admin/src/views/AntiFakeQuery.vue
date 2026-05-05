@@ -211,9 +211,10 @@ async function handleSearch() {
 
 function formatTime(t) {
   if (!t) return '—'
+  // 后端返回本地时间字符串，不再加Z后缀（否则会+8h偏移）
   let timeStr = t
-  if (typeof t === 'string' && !t.includes('T') && !t.includes('Z')) {
-    timeStr = t.replace(' ', 'T') + 'Z'
+  if (typeof t === 'string' && t.includes(' ')) {
+    timeStr = t.replace(' ', 'T')
   }
   return new Date(timeStr).toLocaleString('zh-CN', {
     year: 'numeric', month: '2-digit', day: '2-digit',

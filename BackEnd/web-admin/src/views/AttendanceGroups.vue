@@ -1,31 +1,32 @@
 <template>
   <div class="page-container fade-in-up">
-    <div class="page-header">
-      <div>
-        <h2 class="page-title">考勤组设置</h2>
-        <p class="page-subtitle">管理考勤组规则与成员分配</p>
+    <div class="unified-card">
+      <div class="header-section">
+        <div>
+          <h2 class="page-title">考勤组设置</h2>
+          <p class="page-subtitle">管理考勤组规则与成员分配</p>
+        </div>
+        <el-button type="primary" :icon="Plus" @click="openDrawer()">新增考勤组</el-button>
       </div>
-      <el-button type="primary" :icon="Plus" @click="openDrawer()">新增考勤组</el-button>
-    </div>
 
-    <div class="filter-bar">
-      <el-input
-        v-model="filters.keyword"
-        placeholder="搜索考勤组名称"
-        :prefix-icon="Search"
-        clearable
-        style="width: 240px"
-        @clear="loadData"
-        @keyup.enter="loadData"
-      />
-      <el-select v-model="filters.status" placeholder="状态" clearable style="width: 120px" @change="loadData">
-        <el-option label="启用" :value="1" />
-        <el-option label="停用" :value="0" />
-      </el-select>
-      <el-button type="primary" :icon="Search" @click="loadData">搜索</el-button>
-    </div>
+      <div class="filter-section">
+        <el-input
+          v-model="filters.keyword"
+          placeholder="搜索考勤组名称"
+          :prefix-icon="Search"
+          clearable
+          style="width: 240px"
+          @clear="loadData"
+          @keyup.enter="loadData"
+        />
+        <el-select v-model="filters.status" placeholder="状态" clearable style="width: 120px" @change="loadData">
+          <el-option label="启用" :value="1" />
+          <el-option label="停用" :value="0" />
+        </el-select>
+        <el-button type="primary" :icon="Search" @click="loadData">搜索</el-button>
+      </div>
 
-    <div class="table-card">
+      <div class="table-section">
       <el-table
         :data="tableData"
         v-loading="loading"
@@ -90,6 +91,7 @@
           @size-change="loadData"
           @current-change="loadData"
         />
+      </div>
       </div>
     </div>
 

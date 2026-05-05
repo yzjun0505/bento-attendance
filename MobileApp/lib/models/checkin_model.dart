@@ -36,9 +36,13 @@ class Checkin {
 
   factory Checkin.fromJson(Map<String, dynamic> json) {
     String dateStr = json['created_at'];
-    if (!dateStr.endsWith('Z') && !dateStr.contains('+')) {
-      dateStr = dateStr.replaceAll(' ', 'T') + 'Z';
+    // 后端 dateStrings:true 返回本地时间字符串（如 "2026-04-29 23:26:29"）
+    // 替换空格为T让DateTime.parse正确解析，不再加Z（之前加Z导致北京时间被当UTC再+8h偏移）
+    // 如果已有时区标记（Z或+），保持原样解析后转本地；否则按本地时间直接解析
+    if (dateStr.contains(' ')) {
+      dateStr = dateStr.replaceAll(' ', 'T');
     }
+    final hasTimezone = dateStr.endsWith('Z') || dateStr.contains('+');
 
     return Checkin(
       id: json['id'],
@@ -52,7 +56,9 @@ class Checkin {
       remark: json['remark'] ?? '',
       isOutside: json['is_outside'] == 1,
       distanceToFence: json['distance_to_fence']?.toDouble(),
-      createdAt: DateTime.parse(dateStr).toLocal(),
+      createdAt: hasTimezone
+          ? DateTime.parse(dateStr).toLocal()
+          : DateTime.parse(dateStr),
       projectName: json['project_name'],
       watermarkCode: json['watermark_code'],
     );

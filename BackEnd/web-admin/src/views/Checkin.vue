@@ -309,10 +309,11 @@ async function loadProjects() {
 
 function formatTime(t) {
   if (!t) return '—'
-  // Ensure that if the time string comes without timezone info (e.g., from DB raw string), it's treated as UTC
+  // 后端 dateStrings:true 返回本地时间字符串（如 "2026-04-29 23:26:29"）
+  // 直接替换空格为 T 让 JS Date 按本地时间解析，不再加 Z（那会把北京时间当 UTC 再+8h）
   let timeStr = t;
-  if (typeof t === 'string' && !t.includes('T') && !t.includes('Z')) {
-    timeStr = t.replace(' ', 'T') + 'Z';
+  if (typeof t === 'string' && t.includes(' ')) {
+    timeStr = t.replace(' ', 'T');
   }
   return new Date(timeStr).toLocaleString('zh-CN', {
     year: 'numeric', month: '2-digit', day: '2-digit',

@@ -4,6 +4,8 @@ import '../../core/bento_colors.dart';
 import '../../core/bento_typography.dart';
 import '../../api/dio_client.dart';
 import '../../repositories/checkin_repository.dart';
+import '../../repositories/schedule_repository.dart';
+import '../../repositories/holiday_repository.dart';
 import '../../widgets/bento_empty_state.dart';
 
 class AttendanceCalendarScreen extends StatefulWidget {
@@ -18,6 +20,10 @@ class _AttendanceCalendarScreenState extends State<AttendanceCalendarScreen> {
   DateTime _focusedDay = DateTime.now();
   DateTime _selectedDay = DateTime.now();
   Map<DateTime, List<Map<String, dynamic>>> _events = {};
+  Map<String, List<Map<String, dynamic>>> _scheduleMap = {}; // date -> schedules
+  Map<String, Map<String, dynamic>> _holidayMap = {}; // date -> holiday info
+  late final ScheduleRepository _scheduleRepo;
+  late final HolidayRepository _holidayRepo;
 
   bool _isLoading = true;
 
@@ -25,6 +31,8 @@ class _AttendanceCalendarScreenState extends State<AttendanceCalendarScreen> {
   void initState() {
     super.initState();
     _checkinRepo = CheckinRepository(apiClient: ApiClient());
+    _scheduleRepo = ScheduleRepository();
+    _holidayRepo = HolidayRepository();
     _loadAttendanceData();
   }
 
@@ -46,9 +54,16 @@ class _AttendanceCalendarScreenState extends State<AttendanceCalendarScreen> {
         });
       }
 
+      // 同时加载排班和节假日数据
+      final month = '${_focusedDay.year}-${_focusedDay.month.toString().padLeft(2, '0')}';
+      final scheduleMap = await _scheduleRepo.getCalendarSchedules(month);
+      final holidayMap = await _holidayRepo.getMonthHolidays(_focusedDay);
+
       if (!mounted) return;
       setState(() {
         _events = events;
+        _scheduleMap = scheduleMap;
+        _holidayMap = holidayMap;
         _isLoading = false;
       });
     } on Object catch (_) {

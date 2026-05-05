@@ -259,6 +259,60 @@ html.dark .el-date-editor {
   gap: 24px;
 }
 
+/* 当页面使用统一卡片布局时，容器不需要gap */
+.page-container:has(> .unified-card) {
+  gap: 0;
+}
+
+/* ==============================
+   统一卡片布局 (单卡片紧凑样式)
+   ============================== */
+.unified-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.header-section {
+  padding: 24px 32px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.filter-section {
+  padding: 20px 32px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.table-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+
+.table-section .el-table,
+.table-section :deep(.el-table) {
+  flex: 1;
+}
+
+/* 移除表格表头背景 */
+.table-section :deep(.el-table th.el-table__cell) {
+  background-color: transparent !important;
+}
+
 .page-header {
   display: flex;
   align-items: center;

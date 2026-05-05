@@ -207,6 +207,39 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
                     // 项目绑定提示
                     if (state is AttendanceLoaded) ...[
                       _buildProjectBindBar(state, colors, theme),
+                      // 离线打卡待同步提示
+                      if (state.offlinePendingCount > 0)
+                        Container(
+                          margin: const EdgeInsets.symmetric(
+                            horizontal: BentoSpacing.space20,
+                            vertical: BentoSpacing.space4,
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: colors.warning.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(BentoRadius.sm),
+                            border: Border.all(color: colors.warning.withValues(alpha: 0.3)),
+                          ),
+                          child: GestureDetector(
+                            onTap: () => Navigator.pushNamed(context, '/offline_checkins'),
+                            child: Row(
+                              children: [
+                                Icon(Icons.cloud_off, size: 16, color: colors.warning),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    '\${state.offlinePendingCount} 条打卡待同步',
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: colors.warning,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                                Icon(Icons.chevron_right, size: 16, color: colors.warning),
+                              ],
+                            ),
+                          ),
+                        ),
                       if (state.checkinFeedback != null)
                         _buildCheckinFeedback(state, colors, theme),
                     ],
@@ -220,6 +253,59 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          // 今日排班卡片
+                          if (state is AttendanceLoaded && state.todayShiftName != null)
+                            Container(
+                              width: double.infinity,
+                              margin: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: (state.todayShiftColor != null
+                                    ? Color(int.parse(state.todayShiftColor!.replaceFirst('#', '0xFF')))
+                                    : colors.primary).withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: (state.todayShiftColor != null
+                                      ? Color(int.parse(state.todayShiftColor!.replaceFirst('#', '0xFF')))
+                                      : colors.primary).withValues(alpha: 0.2),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 6,
+                                    height: 32,
+                                    decoration: BoxDecoration(
+                                      color: state.todayShiftColor != null
+                                          ? Color(int.parse(state.todayShiftColor!.replaceFirst('#', '0xFF')))
+                                          : colors.primary,
+                                      borderRadius: BorderRadius.circular(3),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '今日排班：${state.todayShiftName}',
+                                          style: theme.textTheme.bodyMedium?.copyWith(
+                                            color: colors.textPrimary,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        Text(
+                                          '${state.todayShiftStart ?? '--:--'} - ${state.todayShiftEnd ?? '--:--'} · 迟到容忍 ${state.lateTolerance} 分钟',
+                                          style: theme.textTheme.bodySmall?.copyWith(
+                                            color: colors.textSecondary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           Row(
                             children: [
                               Container(

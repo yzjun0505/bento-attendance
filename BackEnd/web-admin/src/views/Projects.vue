@@ -1,33 +1,35 @@
 <template>
   <div class="page-container fade-in-up">
-    <div class="page-header">
-      <div>
-        <h2 class="page-title">项目管理</h2>
-        <p class="page-subtitle">管理项目信息和电子围栏设置</p>
+    <!-- 顶部标题 + 筛选合并卡片 -->
+    <div class="unified-card">
+      <div class="header-section">
+        <div>
+          <h2 class="page-title">项目管理</h2>
+          <p class="page-subtitle">管理项目信息和电子围栏设置</p>
+        </div>
+        <el-button type="primary" :icon="Plus" @click="openDialog()">新增项目</el-button>
       </div>
-      <el-button type="primary" :icon="Plus" @click="openDialog()">新增项目</el-button>
+
+      <div class="filter-section">
+        <el-input
+          v-model="filters.keyword"
+          placeholder="搜索项目名称/地址"
+          :prefix-icon="Search"
+          clearable
+          style="width: 260px"
+          @clear="loadData"
+          @keyup.enter="loadData"
+        />
+        <el-select v-model="filters.status" placeholder="状态" clearable style="width: 120px" @change="loadData">
+          <el-option label="启用" :value="1" />
+          <el-option label="停用" :value="0" />
+        </el-select>
+        <el-button type="primary" :icon="Search" @click="loadData">搜索</el-button>
+      </div>
     </div>
 
-    <!-- 筛选 -->
-    <div class="filter-bar">
-      <el-input
-        v-model="filters.keyword"
-        placeholder="搜索项目名称/地址"
-        :prefix-icon="Search"
-        clearable
-        style="width: 260px"
-        @clear="loadData"
-        @keyup.enter="loadData"
-      />
-      <el-select v-model="filters.status" placeholder="状态" clearable style="width: 120px" @change="loadData">
-        <el-option label="启用" :value="1" />
-        <el-option label="停用" :value="0" />
-      </el-select>
-      <el-button type="primary" :icon="Search" @click="loadData">搜索</el-button>
-    </div>
-
-    <!-- 项目列表卡片 -->
-    <div class="projects-grid">
+    <!-- 项目卡片网格（无外层卡片包裹） -->
+    <div class="projects-grid" style="margin-top: 24px">
       <div
         v-for="project in tableData"
         :key="project.id"

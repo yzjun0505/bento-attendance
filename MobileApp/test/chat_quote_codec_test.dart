@@ -28,4 +28,3 @@ void main() {
     expect(decoded.quoteText, '旧引用');
   });
 }
-

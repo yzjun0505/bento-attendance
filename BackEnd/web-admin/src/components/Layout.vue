@@ -161,15 +161,20 @@ const scrollThreshold = 50 // 滚动阈值，超过此值才触发
 const highFreqMenus = [
   { path: '/dashboard', title: '工作台', icon: 'Grid' },
   { path: '/location', title: '实时位置', icon: 'MapLocation' },
-  { path: '/checkin', title: '打卡记录', icon: 'LocationFilled' }
+  { path: '/checkin', title: '打卡记录', icon: 'LocationFilled' },
+  { path: '/users', title: '人员管理', icon: 'UserFilled' },
+  { path: '/projects', title: '项目管理', icon: 'OfficeBuilding' },
+  { path: '/tracks', title: '轨迹回放', icon: 'MapLocation' }
 ]
 
 const lowFreqMenus = [
-  { path: '/users', title: '人员管理', icon: 'UserFilled' },
-  { path: '/projects', title: '项目管理', icon: 'OfficeBuilding' },
+  { path: '/schedules', title: '排班管理', icon: 'Calendar' },
+  { path: '/holidays', title: '节假日管理', icon: 'CollectionTag' },
+  { path: '/shifts', title: '班次管理', icon: 'AlarmClock' },
+  { path: '/attendance-groups', title: '考勤组设置', icon: 'Clock' },
   { path: '/devices', title: '设备管理', icon: 'Cpu' },
   { path: '/watermarks', title: '水印设计', icon: 'Picture' },
-  { path: '/attendance-groups', title: '考勤组设置', icon: 'Clock' }
+  { path: '/offline-checkins', title: '离线打卡记录', icon: 'Connection' }
 ]
 
 const currentRoute = computed(() => route.path)

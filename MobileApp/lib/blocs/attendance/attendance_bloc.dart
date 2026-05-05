@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
@@ -8,6 +9,8 @@ import '../../models/project_model.dart';
 import '../../repositories/project_repository.dart';
 import '../../repositories/checkin_repository.dart';
 import '../../repositories/checkin_type_repository.dart';
+import '../../repositories/schedule_repository.dart';
+import '../../repositories/offline_checkin_repository.dart';
 import '../../utils/amap_geo_service.dart';
 import '../../utils/coord_utils.dart';
 import '../../models/checkin_model.dart';
@@ -33,6 +36,8 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
   final ProjectRepository projectRepository;
   final CheckinRepository checkinRepository;
   final CheckinTypeRepository checkinTypeRepository;
+  final ScheduleRepository _scheduleRepository = ScheduleRepository();
+  final OfflineCheckinRepository _offlineRepository = OfflineCheckinRepository();
   final ApiClient _apiClient = ApiClient();
 
   AttendanceBloc({
@@ -104,12 +109,22 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
           debugPrint('获取考勤组失败: $e');
           return null;
         }),
+        _scheduleRepository.getTodaySchedule().catchError((e) {
+          debugPrint('获取今日排班失败: $e');
+          return null;
+        }),
+        _offlineRepository.getCachedCount().catchError((e) {
+          debugPrint('获取离线缓存数量失败: $e');
+          return 0;
+        }),
       ]);
 
       final projects = results[0] as List<Project>;
       final history = results[1] as List<Checkin>;
       final checkinTypes = results[2] as List<CheckinType>;
       final groupInfo = results[3] as _AttendanceGroupInfo?;
+      final todaySchedule = results[4] as Map<String, dynamic>?;
+      final offlineCount = results[5] as int? ?? 0;
 
       // 立即触发一次 Loaded 状态（哪怕还没拿到精确定位），让 UI 先显示出来
       // 如果已有旧坐标，先沿用
@@ -123,6 +138,12 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
         lastAddr = s.currentAddress;
       }
 
+      // 从今日排班中提取班次信息
+      String? shiftName = todaySchedule?['shift_name'] as String?;
+      String? shiftStart = _formatTime(todaySchedule?['start_time'] as String?) ?? groupInfo?.startTime;
+      String? shiftEnd = _formatTime(todaySchedule?['end_time'] as String?) ?? groupInfo?.endTime;
+      String? shiftColor = todaySchedule?['color'] as String?;
+
       emit(AttendanceLoaded(
         projects: projects,
         recentHistory: history,
@@ -131,10 +152,15 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
         currentLatitude: lastLat,
         currentLongitude: lastLng,
         currentAddress: lastAddr,
-        workStartTime: groupInfo?.startTime,
-        workEndTime: groupInfo?.endTime,
-        attendanceGroupName: groupInfo?.name,
+        workStartTime: shiftStart,
+        workEndTime: shiftEnd,
+        attendanceGroupName: shiftName ?? groupInfo?.name,
         lateTolerance: groupInfo?.lateTolerance ?? 0,
+        todayShiftName: shiftName,
+        todayShiftStart: shiftStart,
+        todayShiftEnd: shiftEnd,
+        todayShiftColor: shiftColor,
+        offlinePendingCount: offlineCount,
       ));
 
       // 异步获取位置，不阻塞主流程
@@ -274,8 +300,8 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
       // 标记提交中
       emit(currentState.copyWith(isSubmitting: true, checkinFeedback: null));
 
+      String? photoUrl;
       try {
-        String? photoUrl;
         if (event.photoPath != null) {
           final photoFile = File(event.photoPath!);
           photoUrl = await checkinRepository.uploadPhoto(photoFile);
@@ -302,11 +328,43 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
         await Future.delayed(const Duration(seconds: 2));
         add(LoadAttendanceData());
       } catch (e) {
-        // 打卡失败反馈，保持 AttendanceLoaded 状态
-        emit(currentState.copyWith(
-          isSubmitting: false,
-          checkinFeedback: '打卡失败: $e',
-        ));
+        // 检查是否为网络异常，如果是则缓存离线打卡
+        final isNetworkError = e is DioException &&
+            (e.type == DioExceptionType.connectionError ||
+             e.type == DioExceptionType.connectionTimeout ||
+             e.type == DioExceptionType.receiveTimeout);
+
+        if (isNetworkError) {
+          try {
+            await _offlineRepository.cacheOfflineCheckin(
+              _offlineRepository.buildOfflineData(
+                type: event.type,
+                latitude: currentState.currentLatitude!,
+                longitude: currentState.currentLongitude!,
+                address: currentState.currentAddress ?? '',
+                photo: photoUrl,
+                projectId: event.projectId ?? currentState.selectedProjectId ?? currentState.nearestProject?.id,
+              ),
+            );
+            final newCount = await _offlineRepository.getCachedCount();
+            emit(currentState.copyWith(
+              isSubmitting: false,
+              checkinFeedback: '网络异常，已缓存离线打卡',
+              offlinePendingCount: newCount,
+            ));
+          } catch (cacheErr) {
+            emit(currentState.copyWith(
+              isSubmitting: false,
+              checkinFeedback: '打卡失败: $e',
+            ));
+          }
+        } else {
+          // 打卡失败反馈，保持 AttendanceLoaded 状态
+          emit(currentState.copyWith(
+            isSubmitting: false,
+            checkinFeedback: '打卡失败: $e',
+          ));
+        }
         // 3秒后清除失败反馈
         await Future.delayed(const Duration(seconds: 3));
         if (state is AttendanceLoaded) {

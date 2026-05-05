@@ -68,6 +68,25 @@ class AMapController {
       }
     ''');
   }
+
+  /// 绘制轨迹线
+  Future<void> drawTrack(List<Map<String, dynamic>> path) async {
+    final jsonStr = jsonEncode(path).replaceAll("'", "\\'");
+    await _webViewController?.runJavaScript('''
+      if (typeof drawTrack === 'function') {
+        drawTrack('$jsonStr');
+      }
+    ''');
+  }
+
+  /// 清除轨迹
+  Future<void> clearTrack() async {
+    await _webViewController?.runJavaScript('''
+      if (typeof clearTrack === 'function') {
+        clearTrack();
+      }
+    ''');
+  }
 }
 
 /// 高德地图 WebView 组件

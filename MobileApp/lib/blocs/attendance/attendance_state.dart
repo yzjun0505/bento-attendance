@@ -37,6 +37,15 @@ class AttendanceLoaded extends AttendanceState {
   final String? attendanceGroupName; // 考勤组名称
   final int lateTolerance; // 迟到容忍分钟数
 
+  // 今日排班信息（从 /schedules/today 获取）
+  final String? todayShiftName; // 今日班次名称（如"白班"）
+  final String? todayShiftStart; // 今日上班时间
+  final String? todayShiftEnd; // 今日下班时间
+  final String? todayShiftColor; // 今日班次颜色
+
+  // 离线打卡待同步数量
+  final int offlinePendingCount;
+
   const AttendanceLoaded({
     required this.projects,
     this.nearbyProjects = const [],
@@ -57,6 +66,11 @@ class AttendanceLoaded extends AttendanceState {
     this.workEndTime,
     this.attendanceGroupName,
     this.lateTolerance = 0,
+    this.todayShiftName,
+    this.todayShiftStart,
+    this.todayShiftEnd,
+    this.todayShiftColor,
+    this.offlinePendingCount = 0,
   });
 
   /// 当前有效的项目ID（优先用户手动选择，其次最近项目）
@@ -104,6 +118,11 @@ class AttendanceLoaded extends AttendanceState {
     String? workEndTime,
     String? attendanceGroupName,
     int? lateTolerance,
+    String? todayShiftName,
+    String? todayShiftStart,
+    String? todayShiftEnd,
+    String? todayShiftColor,
+    int? offlinePendingCount,
   }) {
     return AttendanceLoaded(
       projects: projects ?? this.projects,
@@ -125,6 +144,11 @@ class AttendanceLoaded extends AttendanceState {
       workEndTime: workEndTime ?? this.workEndTime,
       attendanceGroupName: attendanceGroupName ?? this.attendanceGroupName,
       lateTolerance: lateTolerance ?? this.lateTolerance,
+      todayShiftName: todayShiftName ?? this.todayShiftName,
+      todayShiftStart: todayShiftStart ?? this.todayShiftStart,
+      todayShiftEnd: todayShiftEnd ?? this.todayShiftEnd,
+      todayShiftColor: todayShiftColor ?? this.todayShiftColor,
+      offlinePendingCount: offlinePendingCount ?? this.offlinePendingCount,
     );
   }
 
@@ -149,6 +173,11 @@ class AttendanceLoaded extends AttendanceState {
         workEndTime,
         attendanceGroupName,
         lateTolerance,
+        todayShiftName,
+        todayShiftStart,
+        todayShiftEnd,
+        todayShiftColor,
+        offlinePendingCount,
       ];
 }
 

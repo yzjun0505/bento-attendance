@@ -37,6 +37,18 @@
 - 后端查询时用 `AS start_time`/`AS end_time` 映射给前端
 - 后端 LIMIT/OFFSET 用 `db.query()` + 直接拼接，不能用 `db.execute()` 的占位符
 
+## Web 管理端布局规范（2026-04-29 更新）
+
+- **统一卡片布局**：所有列表页使用 `.unified-card` 包裹 `.header-section` + `.filter-section` + `.table-section`，不再使用分开的 `.page-header` / `.filter-bar` / `.table-card` "三条白杠" 样式
+- `.unified-card` / `.header-section` / `.filter-section` / `.table-section` 样式定义在全局 `src/styles/index.css`
+- 涉及页面：Holidays、Schedules、Shifts、Tracks、Projects、AttendanceGroups、Notifications、OfflineCheckins
+
+## 导航菜单结构（2026-04-29 更新）
+
+**顶部高频导航栏**：工作台、实时位置、打卡记录、人员管理、项目管理、轨迹回放
+
+**基础设置下拉菜单**：排班管理、节假日管理、班次管理、考勤组设置、设备管理、水印设计、离线打卡记录
+
 ## API 路由
 - `/api/checkin` — 打卡 CRUD
 - `/api/checkin/reserve-code` — 预占防伪码
@@ -60,8 +72,13 @@
 ## MySQL 注意事项
 - MySQL 不支持 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` 语法（MariaDB 才支持），迁移需用 try/catch + `ER_DUP_FIELDNAME` 错误码
 - 后端 LIMIT/OFFSET 用 `db.query()` + 直接拼接，不能用 `db.execute()` 的占位符
-- **时区关键**：`mysql2` 驱动默认假设数据库时区为 UTC，会将北京时间 DATETIME 错误转为 UTC Date 对象（减8小时）。已在 `db.js` 连接池配置中加 `dateStrings: ['DATE', 'DATETIME']` 让其返回原始字符串，避免时区自动转换
-- 所有需要格式化日期的地方（如 `getTodayRange`、`attendanceAnalyzer`、Excel文件名）必须用本地时间格式化，禁止用 `toISOString()`
+- **时区关键（2026-04-29 修复）**：
+  - MySQL 服务器时区为 CST（北京时间），`timezone: 'Z'` 是错误配置
+  - `db.js` 连接池配置：`dateStrings: true`（返回原始字符串），**不要设 `timezone: 'Z'`**
+  - 后端返回的时间字符串是本地时间（如 `"2026-04-29 23:26:29"`），前端 **不要加 Z 后缀**（否则会+8h偏移）
+  - 前端 formatTime 统一用 `str.replace(' ', 'T')` 让浏览器按本地时间解析
+  - Flutter 端 `DateTime.parse()` 对无时区后缀的字符串按本地时间解析，不需要 `.toLocal()`
+  - 所有需要格式化日期的地方必须用本地时间格式化，禁止用 `toISOString()`
 
 ## 坐标系关键点
 - GPS 返回 WGS84 坐标，高德/国测局用的是 GCJ02，两者有几百米偏移

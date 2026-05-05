@@ -23,6 +23,8 @@ import 'screens/login/login_screen.dart';
 import 'screens/main_navigation.dart';
 import 'screens/attendance/camera_checkin_screen.dart';
 import 'screens/attendance/local_album_screen.dart';
+import 'screens/track/track_screen.dart';
+import 'screens/offline/offline_checkins_screen.dart';
 import 'services/local_notification_service.dart';
 import 'services/getui_push_service.dart';
 
@@ -95,6 +97,8 @@ class MyApp extends StatelessWidget {
               routes: {
                 '/camera_checkin': (context) => const CameraCheckinScreen(),
                 '/gallery': (context) => const LocalAlbumScreen(),
+                '/track': (context) => const TrackScreen(),
+                '/offline_checkins': (context) => const OfflineCheckinsScreen(),
               },
             );
           },

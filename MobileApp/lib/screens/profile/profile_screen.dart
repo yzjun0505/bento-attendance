@@ -15,6 +15,7 @@ import '../../repositories/notification_repository.dart';
 import '../notifications/notification_screen.dart';
 import '../settings/settings_screen.dart';
 import 'edit_profile_screen.dart';
+import '../offline/offline_checkins_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -424,6 +425,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onTap: () {
               // 切换主题
               context.read<ThemeBloc>().add(ToggleTheme());
+            },
+            showDivider: true,
+          ),
+          BentoListTile(
+            leading: Icon(Icons.cloud_off_outlined, size: 22, color: colors.warning),
+            title: '离线打卡记录',
+            trailing: Icon(Icons.chevron_right, size: 18, color: colors.textTertiary),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const OfflineCheckinsScreen()),
+              );
             },
             showDivider: true,
           ),
