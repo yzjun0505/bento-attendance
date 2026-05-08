@@ -236,7 +236,7 @@ MIT License - 详见 [LICENSE](LICENSE)
 ***
 
 ## 📞 联系方式
-
+-联系邮箱：yzjun0505@gmail.com
 - 项目地址: <https://github.com/yzjun0505/bento-attendance>
 - 作者: yzjun0505
 
