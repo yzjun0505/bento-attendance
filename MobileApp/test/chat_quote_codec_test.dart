@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mobile_app/models/chat_quote_codec.dart';
+import 'package:jingmap_app/models/chat_quote_codec.dart';
 
 void main() {
   test('encode/decode roundtrip', () {

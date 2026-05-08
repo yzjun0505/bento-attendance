@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 class ApiClient {
@@ -9,6 +10,64 @@ class ApiClient {
   final Dio _refreshDio = Dio();
   final _storage = const FlutterSecureStorage();
   static Future<String?>? _refreshing;
+  static const _runtimeApiBaseUrlKey = 'runtime_api_base_url';
+  static const _runtimeServerIpKey = 'runtime_server_ip';
+  static String? _runtimeApiBaseUrl;
+  static String? _runtimeServerIp;
+
+  static Future<void> loadRuntimeConfig() async {
+    final prefs = await SharedPreferences.getInstance();
+    _runtimeApiBaseUrl = prefs.getString(_runtimeApiBaseUrlKey);
+    _runtimeServerIp = prefs.getString(_runtimeServerIpKey);
+  }
+
+  static Future<void> saveRuntimeApiBaseUrl(String value) async {
+    final normalized = normalizeApiBaseUrl(value);
+    final prefs = await SharedPreferences.getInstance();
+    _runtimeApiBaseUrl = normalized;
+    _runtimeServerIp = Uri.parse(normalized).host;
+    await prefs.setString(_runtimeApiBaseUrlKey, normalized);
+    await prefs.setString(_runtimeServerIpKey, _runtimeServerIp!);
+  }
+
+  static String normalizeApiBaseUrl(String value) {
+    var raw = value.trim();
+    if (raw.isEmpty) return baseUrl;
+    final hadScheme = raw.startsWith('http://') || raw.startsWith('https://');
+    if (!hadScheme) {
+      raw = 'http://$raw';
+    }
+
+    var uri = Uri.parse(raw);
+    if (uri.host.isEmpty && uri.path.isNotEmpty) {
+      uri = Uri.parse('http://$raw');
+    }
+
+    var path = uri.path;
+    if (path.isEmpty || path == '/') {
+      path = '/api';
+    } else if (!path.endsWith('/api')) {
+      path = path.endsWith('/') ? '${path}api' : '$path/api';
+    }
+
+    uri = uri.replace(
+      port: uri.hasPort ? uri.port : (hadScheme ? null : 3000),
+      path: path,
+      query: null,
+      fragment: null,
+    );
+    return uri.toString().replaceFirst(RegExp(r'/$'), '');
+  }
+
+  static String _configuredHost() {
+    if (_runtimeServerIp != null && _runtimeServerIp!.isNotEmpty) {
+      return _runtimeServerIp!;
+    }
+    if (_runtimeApiBaseUrl != null && _runtimeApiBaseUrl!.isNotEmpty) {
+      return Uri.parse(_runtimeApiBaseUrl!).host;
+    }
+    return serverIp;
+  }
 
   // --- 统一服务器 IP 配置 ---
   // 说明：
@@ -19,18 +78,36 @@ class ApiClient {
   // 推荐：不要再手改代码，直接用：
   // flutter run --dart-define=SERVER_IP=192.168.1.10
   static String get serverIp {
+    if (_runtimeServerIp != null && _runtimeServerIp!.isNotEmpty) {
+      return _runtimeServerIp!;
+    }
     const v = String.fromEnvironment('SERVER_IP');
     if (v.isNotEmpty) return v;
-    // 如果在真机/平板上测试，请将此处的 IP 改为你电脑的局域网 IP（如 10.157.202.116）
-    // 原来的 10.0.2.2 只适用于 Android 官方模拟器
-    return '10.157.202.116'; 
+    if (kIsWeb) return Uri.base.host.isNotEmpty ? Uri.base.host : '127.0.0.1';
+    if (defaultTargetPlatform == TargetPlatform.android) return '10.0.2.2';
+    return '127.0.0.1';
   }
 
-  static String get baseUrl => 'http://$serverIp:3000/api';
-  
+  static String get baseUrl {
+    if (_runtimeApiBaseUrl != null && _runtimeApiBaseUrl!.isNotEmpty) {
+      return _runtimeApiBaseUrl!;
+    }
+    const v = String.fromEnvironment('API_BASE_URL');
+    if (v.isEmpty) return 'http://$serverIp:3000/api';
+    final normalized = v.endsWith('/') ? v.substring(0, v.length - 1) : v;
+    return normalized.endsWith('/api') ? normalized : '$normalized/api';
+  }
+
   // OpenIM 默认地址（当后端未返回配置时作为 fallback）
-  static String get openIMApiUrl => 'http://$serverIp:10002';
-  static String get openIMWsUrl => 'ws://$serverIp:10001';
+  static String get openIMApiUrl {
+    const v = String.fromEnvironment('OPENIM_API_URL');
+    return v.isNotEmpty ? v : 'http://${_configuredHost()}:10002';
+  }
+
+  static String get openIMWsUrl {
+    const v = String.fromEnvironment('OPENIM_WS_URL');
+    return v.isNotEmpty ? v : 'ws://${_configuredHost()}:10001';
+  }
 
   Future<String> _getDeviceId() async {
     final existing = await _storage.read(key: 'device_id');
@@ -96,10 +173,7 @@ class ApiClient {
   }
 
   ApiClient() {
-    _dio.options.baseUrl = baseUrl;
-    _dio.options.connectTimeout = const Duration(seconds: 15);
-    _dio.options.receiveTimeout = const Duration(seconds: 30);
-    _dio.options.sendTimeout = const Duration(seconds: 30);
+    reloadOptions();
 
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
@@ -133,6 +207,17 @@ class ApiClient {
         return handler.next(error);
       },
     ));
+  }
+
+  void reloadOptions() {
+    _dio.options.baseUrl = baseUrl;
+    _dio.options.connectTimeout = const Duration(seconds: 15);
+    _dio.options.receiveTimeout = const Duration(seconds: 30);
+    _dio.options.sendTimeout = const Duration(seconds: 30);
+    _refreshDio.options.baseUrl = baseUrl;
+    _refreshDio.options.connectTimeout = const Duration(seconds: 10);
+    _refreshDio.options.receiveTimeout = const Duration(seconds: 15);
+    _refreshDio.options.sendTimeout = const Duration(seconds: 15);
   }
 
   Dio get dio => _dio;

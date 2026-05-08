@@ -8,6 +8,7 @@ import '../../blocs/theme/theme_state.dart';
 import '../../core/bento_colors.dart';
 import '../../core/bento_typography.dart';
 import '../../widgets/bento_card.dart';
+import 'environment_diagnostics_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -30,6 +31,8 @@ class SettingsScreen extends StatelessWidget {
                 const SizedBox(height: 20),
                 _buildChatSection(context, colors),
                 const SizedBox(height: 20),
+                _buildEnvironmentSection(context, colors),
+                const SizedBox(height: 20),
                 _buildAboutSection(context, colors),
               ],
             ),
@@ -39,7 +42,8 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildThemeSection(BuildContext context, ThemeState state, BentoColors colors) {
+  Widget _buildThemeSection(
+      BuildContext context, ThemeState state, BentoColors colors) {
     return BentoCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -59,7 +63,8 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildThemeToggle(BuildContext context, ThemeState state, BentoColors colors) {
+  Widget _buildThemeToggle(
+      BuildContext context, ThemeState state, BentoColors colors) {
     return Container(
       decoration: BoxDecoration(
         color: colors.surfaceVariant,
@@ -143,6 +148,56 @@ class SettingsScreen extends StatelessWidget {
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildEnvironmentSection(BuildContext context, BentoColors colors) {
+    return BentoCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '环境',
+            style: TextStyle(
+              color: colors.textPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            decoration: BoxDecoration(
+              color: colors.surfaceVariant,
+              borderRadius: BorderRadius.circular(BentoRadius.sm),
+            ),
+            child: ListTile(
+              leading: Icon(Icons.network_check, color: colors.primary),
+              title: Text(
+                '服务诊断',
+                style: TextStyle(
+                  color: colors.textPrimary,
+                  fontSize: 16,
+                ),
+              ),
+              subtitle: Text(
+                'API、OpenIM 与当前地址',
+                style: TextStyle(
+                  color: colors.textSecondary,
+                  fontSize: 14,
+                ),
+              ),
+              trailing: Icon(Icons.chevron_right, color: colors.textTertiary),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const EnvironmentDiagnosticsScreen()),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

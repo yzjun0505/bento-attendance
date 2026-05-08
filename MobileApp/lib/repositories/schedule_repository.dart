@@ -24,8 +24,8 @@ class ScheduleRepository {
   }) async {
     try {
       final response = await _dio.get('/schedules', queryParameters: {
-        'start_date': startDate,
-        'end_date': endDate,
+        'date_start': startDate,
+        'date_end': endDate,
       });
       if (response.statusCode == 200 && response.data['code'] == 200) {
         final data = response.data['data'];
@@ -43,17 +43,20 @@ class ScheduleRepository {
   }
 
   /// 获取当月日历排班
-  Future<Map<String, List<Map<String, dynamic>>>> getCalendarSchedules(String month) async {
+  Future<Map<String, List<Map<String, dynamic>>>> getCalendarSchedules(
+      String month) async {
     try {
-      final response = await _dio.get('/schedules/calendar', queryParameters: {
-        'date': month,
+      final response = await _dio.get('/schedules', queryParameters: {
+        'month': month,
       });
       if (response.statusCode == 200 && response.data['code'] == 200) {
         final data = response.data['data'];
         final map = <String, List<Map<String, dynamic>>>{};
         if (data is List) {
           for (final item in data) {
-            final dateKey = item['date'] as String? ?? item['schedule_date'] as String?;
+            final rawDate =
+                item['date']?.toString() ?? item['schedule_date']?.toString();
+            final dateKey = _normalizeDate(rawDate);
             if (dateKey != null) {
               map.putIfAbsent(dateKey, () => []);
               map[dateKey]!.add(Map<String, dynamic>.from(item));
@@ -66,5 +69,11 @@ class ScheduleRepository {
     } catch (e) {
       return {};
     }
+  }
+
+  String? _normalizeDate(String? value) {
+    if (value == null || value.isEmpty) return null;
+    if (value.length >= 10) return value.substring(0, 10);
+    return value;
   }
 }

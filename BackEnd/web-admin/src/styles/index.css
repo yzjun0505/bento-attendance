@@ -304,12 +304,12 @@ html.dark .el-date-editor {
 }
 
 .table-section .el-table,
-.table-section :deep(.el-table) {
+.table-section .el-table {
   flex: 1;
 }
 
 /* 移除表格表头背景 */
-.table-section :deep(.el-table th.el-table__cell) {
+.table-section .el-table th.el-table__cell {
   background-color: transparent !important;
 }
 

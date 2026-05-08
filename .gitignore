@@ -44,3 +44,7 @@ MobileApp/android/app/release/
 
 # Test coverage
 coverage/
+
+# Uploads (user photos, sensitive content)
+BackEnd/server/uploads/
+openIM/open-im-server/_data/

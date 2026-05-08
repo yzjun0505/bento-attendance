@@ -174,6 +174,7 @@ const lowFreqMenus = [
   { path: '/attendance-groups', title: '考勤组设置', icon: 'Clock' },
   { path: '/devices', title: '设备管理', icon: 'Cpu' },
   { path: '/watermarks', title: '水印设计', icon: 'Picture' },
+  { path: '/anti-fake-query', title: '防伪码查询', icon: 'Search' },
   { path: '/offline-checkins', title: '离线打卡记录', icon: 'Connection' }
 ]
 

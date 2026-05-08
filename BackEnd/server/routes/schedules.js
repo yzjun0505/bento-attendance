@@ -8,7 +8,7 @@ const scheduleController = require('../controllers/scheduleController');
 
 router.use(authMiddleware);
 
-router.get('/', managerOrAdmin, scheduleController.getSchedules);
+router.get('/', scheduleController.getSchedules);
 router.get('/calendar', managerOrAdmin, scheduleController.getCalendar);
 router.get('/today', scheduleController.getTodaySchedule);
 router.post('/batch', adminOnly, scheduleController.batchSchedule);

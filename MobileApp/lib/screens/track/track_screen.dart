@@ -6,7 +6,9 @@ import '../../widgets/bento_widgets.dart';
 import '../../widgets/amap_webview.dart';
 import '../../repositories/track_repository.dart';
 
-const _kAmapWebKey = 'your_amap_web_key_here';
+/// 高德地图 Web JS API Key
+/// 请在运行时通过 --dart-define=AMAP_WEB_KEY=your_key 传入
+const _kAmapWebKey = String.fromEnvironment('AMAP_WEB_KEY', defaultValue: 'your_amap_web_key_here');
 
 class TrackScreen extends StatefulWidget {
   final int? userId;

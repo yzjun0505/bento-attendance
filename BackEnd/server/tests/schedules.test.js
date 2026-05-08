@@ -119,12 +119,14 @@ describe('排班管理 API 测试', () => {
       expect(Array.isArray(res.body.data)).toBe(true);
     });
 
-    test('缺少用户ID返回 400', async () => {
+    test('不传用户ID返回所有排班', async () => {
       const res = await request(app)
         .get('/api/schedules')
         .set('Authorization', `Bearer ${adminToken}`);
 
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(200);
+      expect(res.body.code).toBe(200);
+      expect(Array.isArray(res.body.data)).toBe(true);
     });
   });
 

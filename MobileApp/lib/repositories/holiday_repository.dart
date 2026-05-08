@@ -42,11 +42,15 @@ class HolidayRepository {
   }
 
   /// 获取某月节假日Map，key为日期字符串
-  Future<Map<String, Map<String, dynamic>>> getMonthHolidays(DateTime month) async {
+  Future<Map<String, Map<String, dynamic>>> getMonthHolidays(
+      DateTime month) async {
     final list = await getHolidays(month.year);
     final map = <String, Map<String, dynamic>>{};
     for (final h in list) {
-      final dateStr = h['date'] as String?;
+      final rawDate = h['date']?.toString();
+      final dateStr = rawDate != null && rawDate.length >= 10
+          ? rawDate.substring(0, 10)
+          : rawDate;
       if (dateStr != null) {
         map[dateStr] = h;
       }

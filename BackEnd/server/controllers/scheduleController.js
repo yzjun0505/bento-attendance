@@ -24,12 +24,16 @@ async function getSchedules(req, res) {
   try {
     const db = getPool();
     const { user_id, user_ids, date_start, date_end, month } = req.query;
+    const isManager = req.user.role === 'admin' || req.user.role === 'manager';
 
     let where = 'WHERE 1=1';
     const params = [];
 
     // 支持单用户或多用户筛选
-    if (user_id) {
+    if (!isManager) {
+      where += ' AND us.user_id = ?';
+      params.push(req.user.id);
+    } else if (user_id) {
       where += ' AND us.user_id = ?';
       params.push(parseInt(user_id));
     } else if (user_ids) {

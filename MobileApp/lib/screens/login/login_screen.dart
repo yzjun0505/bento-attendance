@@ -1,11 +1,14 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../api/dio_client.dart';
 import '../../blocs/auth/auth_bloc.dart';
 import '../../blocs/auth/auth_event.dart';
 import '../../blocs/auth/auth_state.dart';
 import '../../core/bento_colors.dart';
 import '../../core/bento_typography.dart';
 import '../../widgets/bento_widgets.dart';
+import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -14,41 +17,84 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _serverController = TextEditingController();
   bool _obscurePassword = true;
-  late AnimationController _animationController;
+  bool _testingServer = false;
 
   @override
   void initState() {
     super.initState();
-    _animationController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 10),
-    )..repeat(reverse: true);
+    _serverController.text = ApiClient.baseUrl;
   }
 
   @override
   void dispose() {
-    _animationController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
+    _serverController.dispose();
     super.dispose();
   }
 
   void _onLoginButtonPressed() {
-    BlocProvider.of<AuthBloc>(context).add(
-      LoggedIn(
-        username: _usernameController.text,
-        password: _passwordController.text,
-      ),
-    );
+    final username = _usernameController.text.trim();
+    final password = _passwordController.text;
+    if (username.isEmpty || password.isEmpty) {
+      _showMessage('请输入用户名和密码');
+      return;
+    }
+
+    context.read<AuthBloc>().add(
+          LoggedIn(username: username, password: password),
+        );
   }
 
-  void _enterGuestMode() {
-    // TODO: 触发 AuthGuest 状态
-    // context.read<AuthBloc>().add(EnterGuestMode());
+  Future<void> _openRegister() async {
+    final username = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const RegisterScreen()),
+    );
+    if (username != null && username.isNotEmpty && mounted) {
+      _usernameController.text = username;
+      _showMessage('注册成功，请输入密码登录');
+    }
+  }
+
+  Future<void> _saveServerAddress(String value) async {
+    final normalized = ApiClient.normalizeApiBaseUrl(value);
+    await ApiClient.saveRuntimeApiBaseUrl(normalized);
+    if (!mounted) return;
+    context.read<AuthBloc>().apiClient.reloadOptions();
+    _serverController.text = normalized;
+  }
+
+  Future<void> _testServer(String value) async {
+    setState(() => _testingServer = true);
+    final normalized = ApiClient.normalizeApiBaseUrl(value);
+    try {
+      final dio = Dio(BaseOptions(
+        baseUrl: normalized,
+        connectTimeout: const Duration(seconds: 5),
+        receiveTimeout: const Duration(seconds: 5),
+      ));
+      final resp = await dio.get('/health');
+      final ok = resp.statusCode == 200 &&
+          (resp.data['code'] == 200 || resp.data['message'] == 'OK');
+      if (!mounted) return;
+      _showMessage(ok ? '后端连接正常' : '后端可访问，但依赖状态异常');
+    } catch (_) {
+      if (!mounted) return;
+      _showMessage('连接失败，请确认电脑和手机在同一网络，且后端已启动');
+    } finally {
+      if (mounted) setState(() => _testingServer = false);
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -64,134 +110,74 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             _showErrorDialog(context, state.error!, colors);
           }
         },
-        child: Stack(
-          children: [
-            // 背景动效 (Blobs) — 跟随主题
-            _buildBackgroundBlobs(colors),
-            // 主内容
-            SafeArea(
-              child: Center(
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: BentoSpacing.space24,
-                    vertical: BentoSpacing.space48,
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildHeader(colors, theme),
-                      const SizedBox(height: BentoSpacing.space32),
-                      // 登录表单
-                      _buildLoginForm(colors, theme),
-                      const SizedBox(height: BentoSpacing.space20),
-                      // 登录按钮
-                      _buildLoginButton(colors),
-                      const SizedBox(height: BentoSpacing.space16),
-                      // 页脚链接
-                      _buildFooterLinks(colors),
-                      const SizedBox(height: BentoSpacing.space32),
-                      // 社交登录
-                      _buildSocialLogin(colors, theme),
-                      const SizedBox(height: BentoSpacing.space24),
-                      // 游客模式入口
-                      BentoButton.ghost(
-                        text: '游客模式进入',
-                        icon: Icons.explore_outlined,
-                        size: BentoButtonSize.medium,
-                        onPressed: _enterGuestMode,
-                      ),
-                    ],
-                  ),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(
+                horizontal: BentoSpacing.space24,
+                vertical: BentoSpacing.space32,
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildHeader(colors, theme),
+                    const SizedBox(height: BentoSpacing.space24),
+                    _buildLoginForm(colors, theme),
+                    const SizedBox(height: BentoSpacing.space16),
+                    _buildServerCard(colors, theme),
+                    const SizedBox(height: BentoSpacing.space20),
+                    _buildLoginButton(colors),
+                    const SizedBox(height: BentoSpacing.space12),
+                    _buildFooterLinks(colors),
+                  ],
                 ),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildBackgroundBlobs(BentoColors colors) {
-    return AnimatedBuilder(
-      animation: _animationController,
-      builder: (context, child) {
-        return Stack(
-          children: [
-            Positioned(
-              top: -100 + (20 * _animationController.value),
-              right: -50 - (20 * _animationController.value),
-              child: _Blob(
-                color: colors.primary.withValues(alpha: 0.12),
-                size: 300,
-              ),
-            ),
-            Positioned(
-              bottom: 100 - (30 * _animationController.value),
-              left: -80 + (20 * _animationController.value),
-              child: _Blob(
-                color: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
-                size: 280,
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   Widget _buildHeader(BentoColors colors, ThemeData theme) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Logo
-        TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0.95, end: 1.05),
-          duration: const Duration(seconds: 2),
-          curve: Curves.easeInOut,
-          builder: (context, value, child) {
-            return Transform.scale(
-              scale: value,
-              child: Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  gradient: colors.primaryGradient,
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: colors.primary.withValues(alpha: 0.3),
-                      blurRadius: 20,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: const Icon(Icons.location_on_rounded, size: 40, color: Colors.white),
+        Container(
+          width: 64,
+          height: 64,
+          decoration: BoxDecoration(
+            gradient: colors.primaryGradient,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: colors.primary.withValues(alpha: 0.24),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
               ),
-            );
-          },
+            ],
+          ),
+          child: const Icon(Icons.location_on_rounded,
+              size: 34, color: Colors.white),
         ),
         const SizedBox(height: BentoSpacing.space20),
         Text(
-          "Bento Attendance",
+          '境图考勤',
           style: theme.textTheme.headlineMedium?.copyWith(
             color: colors.textPrimary,
-            letterSpacing: 0.5,
             fontWeight: FontWeight.w800,
+            letterSpacing: 0,
           ),
         ),
         const SizedBox(height: BentoSpacing.space8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          decoration: BoxDecoration(
-            color: colors.surfaceVariant,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text(
-            "极简 · 严谨 · 高效",
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: colors.textSecondary,
-              letterSpacing: 2,
-            ),
+        Text(
+          '定位打卡、现场记录与团队协同',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: colors.textSecondary,
+            height: 1.4,
           ),
         ),
       ],
@@ -201,9 +187,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   Widget _buildLoginForm(BentoColors colors, ThemeData theme) {
     return BentoCard(
       padding: const EdgeInsets.all(BentoSpacing.space4),
+      borderRadius: BentoRadius.lg,
       child: Column(
         children: [
-          // 用户名输入框
           BentoInput(
             controller: _usernameController,
             hint: '用户名',
@@ -211,15 +197,16 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             textInputAction: TextInputAction.next,
           ),
           Divider(height: 1, color: colors.divider),
-          // 密码输入框
           BentoInput(
             controller: _passwordController,
             hint: '密码',
             prefixIcon: const Icon(Icons.lock_rounded),
             obscureText: _obscurePassword,
-            suffixIcon: GestureDetector(
-              onTap: () => setState(() => _obscurePassword = !_obscurePassword),
-              child: Icon(
+            textInputAction: TextInputAction.done,
+            suffixIcon: IconButton(
+              onPressed: () =>
+                  setState(() => _obscurePassword = !_obscurePassword),
+              icon: Icon(
                 _obscurePassword ? Icons.visibility_off : Icons.visibility,
                 color: colors.textTertiary,
                 size: 20,
@@ -231,12 +218,56 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     );
   }
 
+  Widget _buildServerCard(BentoColors colors, ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(BentoRadius.md),
+        border: Border.all(color: colors.border),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.dns_outlined, color: colors.primary, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '后端服务地址',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colors.textTertiary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  ApiClient.baseUrl,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: _showServerSettings,
+            child: const Text('修改'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildLoginButton(BentoColors colors) {
     return BlocBuilder<AuthBloc, AuthState>(
       builder: (context, state) {
         final isLoading = state is AuthLoading;
         return BentoButton.primary(
-          text: '登录系统',
+          text: '登录',
           size: BentoButtonSize.large,
           fullWidth: true,
           loading: isLoading,
@@ -252,9 +283,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         TextButton(
-          onPressed: () {},
+          onPressed: _showForgotPasswordDialog,
           child: Text(
-            "忘记密码",
+            '忘记密码',
             style: TextStyle(color: colors.textSecondary, fontSize: 14),
           ),
         ),
@@ -267,9 +298,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           ),
         ),
         TextButton(
-          onPressed: () {},
+          onPressed: _openRegister,
           child: Text(
-            "新用户注册",
+            '新用户注册',
             style: TextStyle(
               color: colors.primary,
               fontSize: 14,
@@ -281,40 +312,131 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     );
   }
 
-  Widget _buildSocialLogin(BentoColors colors, ThemeData theme) {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(child: Divider(color: colors.divider)),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                "其他登录方式",
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colors.textTertiary,
-                ),
-              ),
+  void _showForgotPasswordDialog() {
+    final colors = context.colors;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: colors.surface,
+          title: Text('忘记密码', style: TextStyle(color: colors.textPrimary)),
+          content: Text(
+            '当前系统没有短信或邮箱找回密码功能。请联系管理员在管理后台「人员管理」中为你重置密码。',
+            style: TextStyle(color: colors.textSecondary, height: 1.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('知道了'),
             ),
-            Expanded(child: Divider(color: colors.divider)),
           ],
-        ),
-        const SizedBox(height: BentoSpacing.space16),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _SocialIcon(icon: Icons.apple_rounded, colors: colors),
-            const SizedBox(width: 20),
-            _SocialIcon(icon: Icons.fingerprint_rounded, colors: colors),
-            const SizedBox(width: 20),
-            _SocialIcon(icon: Icons.face_unlock_rounded, colors: colors),
-          ],
-        ),
-      ],
+        );
+      },
     );
   }
 
-  void _showErrorDialog(BuildContext context, String message, BentoColors colors) {
+  Future<void> _showServerSettings() async {
+    final colors = context.colors;
+    _serverController.text = ApiClient.baseUrl;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: colors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: BentoSpacing.space20,
+                right: BentoSpacing.space20,
+                top: BentoSpacing.space20,
+                bottom: MediaQuery.of(sheetContext).viewInsets.bottom +
+                    BentoSpacing.space20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    '配置后端服务',
+                    style: TextStyle(
+                      color: colors.textPrimary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '真机调试时填电脑局域网 IP，例如 http://192.168.1.10:3000/api',
+                    style: TextStyle(
+                        color: colors.textSecondary, fontSize: 13, height: 1.4),
+                  ),
+                  const SizedBox(height: BentoSpacing.space16),
+                  TextField(
+                    controller: _serverController,
+                    keyboardType: TextInputType.url,
+                    decoration: InputDecoration(
+                      prefixIcon: const Icon(Icons.link),
+                      hintText: 'http://192.168.1.10:3000/api',
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(BentoRadius.sm)),
+                    ),
+                  ),
+                  const SizedBox(height: BentoSpacing.space16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _testingServer
+                              ? null
+                              : () async {
+                                  setSheetState(() => _testingServer = true);
+                                  await _testServer(_serverController.text);
+                                  if (mounted) {
+                                    setSheetState(() => _testingServer = false);
+                                  }
+                                },
+                          icon: _testingServer
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.network_check),
+                          label: const Text('测试'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            await _saveServerAddress(_serverController.text);
+                            if (mounted && sheetContext.mounted) {
+                              Navigator.pop(sheetContext);
+                              _showMessage('服务地址已保存');
+                            }
+                          },
+                          icon: const Icon(Icons.check),
+                          label: const Text('保存'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showErrorDialog(
+      BuildContext context, String message, BentoColors colors) {
     showDialog(
       context: context,
       builder: (BuildContext ctx) {
@@ -347,70 +469,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
-              style: TextButton.styleFrom(
-                backgroundColor: colors.primary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(BentoRadius.sm),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              ),
-              child: Text(
-                '确定',
-                style: TextStyle(
-                  color: colors.textOnPrimary,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              child: const Text('确定'),
             ),
           ],
         );
       },
-    );
-  }
-}
-
-class _Blob extends StatelessWidget {
-  final Color color;
-  final double size;
-
-  const _Blob({required this.color, required this.size});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: color,
-            blurRadius: 100,
-            spreadRadius: 20,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SocialIcon extends StatelessWidget {
-  final IconData icon;
-  final BentoColors colors;
-
-  const _SocialIcon({required this.icon, required this.colors});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 52,
-      height: 52,
-      decoration: BoxDecoration(
-        color: colors.surfaceVariant,
-        borderRadius: BorderRadius.circular(BentoRadius.md),
-        border: Border.all(color: colors.border),
-      ),
-      child: Icon(icon, color: colors.textSecondary, size: 24),
     );
   }
 }

@@ -64,7 +64,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onRefresh: () async {
                 await _fetchUnreadCount();
                 if (!isGuest) {
-                  context.read<HomeBloc>().add(const LoadHomeSummary(silent: true));
+                  context
+                      .read<HomeBloc>()
+                      .add(const LoadHomeSummary(silent: true));
                 }
               },
               child: SingleChildScrollView(
@@ -88,8 +90,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     if (!isGuest) ...[
                       BlocBuilder<HomeBloc, HomeState>(
                         builder: (context, homeState) {
-                          final loaded = homeState is HomeSummaryLoaded ? homeState : null;
-                          return _buildAttendanceSummaryCard(colors, theme, loaded);
+                          final loaded =
+                              homeState is HomeSummaryLoaded ? homeState : null;
+                          return _buildAttendanceSummaryCard(
+                              colors, theme, loaded);
                         },
                       ),
                       const SizedBox(height: BentoSpacing.space16),
@@ -133,7 +137,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               : () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const EditProfileScreen()),
+                    MaterialPageRoute(
+                        builder: (_) => const EditProfileScreen()),
                   );
                 },
           child: BentoAvatar.large(
@@ -157,14 +162,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
         if (!isGuest)
           Text(
             '@${user.username}',
-            style: theme.textTheme.bodySmall?.copyWith(color: colors.textTertiary),
+            style:
+                theme.textTheme.bodySmall?.copyWith(color: colors.textTertiary),
           ),
         if (!isGuest && (user.projectName?.isNotEmpty == true))
           Padding(
             padding: const EdgeInsets.only(top: 2),
             child: Text(
               user.projectName!,
-              style: theme.textTheme.bodySmall?.copyWith(color: colors.textTertiary),
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: colors.textTertiary),
             ),
           ),
         if (!isGuest && user.role != null)
@@ -208,7 +215,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             size: BentoButtonSize.medium,
             fullWidth: true,
             onPressed: () {
-              // TODO: 触发登录流程
+              context.read<AuthBloc>().add(LoggedOut());
             },
           ),
         ],
@@ -217,7 +224,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   /// 考勤摘要卡片
-  Widget _buildAttendanceSummaryCard(BentoColors colors, ThemeData theme, HomeSummaryLoaded? summary) {
+  Widget _buildAttendanceSummaryCard(
+      BentoColors colors, ThemeData theme, HomeSummaryLoaded? summary) {
     return BentoCard(
       padding: const EdgeInsets.all(BentoSpacing.space20),
       child: Column(
@@ -236,7 +244,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Expanded(
                 child: _buildKeyValue(
                   label: '出勤',
-                  value: summary != null ? '${summary.totalCheckinsThisMonth} 天' : '—',
+                  value: summary != null
+                      ? '${summary.totalCheckinsThisMonth} 天'
+                      : '—',
                   colors: colors,
                   theme: theme,
                 ),
@@ -245,7 +255,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Expanded(
                 child: _buildKeyValue(
                   label: '考勤组',
-                  value: summary?.attendanceGroupName?.isNotEmpty == true ? summary!.attendanceGroupName! : '—',
+                  value: summary?.attendanceGroupName?.isNotEmpty == true
+                      ? summary!.attendanceGroupName!
+                      : '—',
                   colors: colors,
                   theme: theme,
                 ),
@@ -258,7 +270,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Expanded(
                 child: _buildKeyValue(
                   label: '上班时间',
-                  value: summary?.workStartTime?.isNotEmpty == true ? summary!.workStartTime! : '—',
+                  value: summary?.workStartTime?.isNotEmpty == true
+                      ? summary!.workStartTime!
+                      : '—',
                   colors: colors,
                   theme: theme,
                 ),
@@ -267,7 +281,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Expanded(
                 child: _buildKeyValue(
                   label: '下班时间',
-                  value: summary?.workEndTime?.isNotEmpty == true ? summary!.workEndTime! : '—',
+                  value: summary?.workEndTime?.isNotEmpty == true
+                      ? summary!.workEndTime!
+                      : '—',
                   colors: colors,
                   theme: theme,
                 ),
@@ -288,43 +304,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: theme.textTheme.bodySmall?.copyWith(color: colors.textTertiary)),
+        Text(label,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: colors.textTertiary)),
         const SizedBox(height: 4),
-        Text(value, style: theme.textTheme.bodyMedium?.copyWith(color: colors.textPrimary, fontWeight: FontWeight.w600)),
+        Text(value,
+            style: theme.textTheme.bodyMedium?.copyWith(
+                color: colors.textPrimary, fontWeight: FontWeight.w600)),
       ],
     );
   }
 
   /// 信息列表卡片（合并为单卡片）
-  Widget _buildInfoCard(BuildContext context, BentoColors colors, ThemeData theme, dynamic user) {
+  Widget _buildInfoCard(
+      BuildContext context, BentoColors colors, ThemeData theme, dynamic user) {
     return BentoCard(
       padding: EdgeInsets.zero,
       child: Column(
         children: [
           BentoListTile(
-            leading: Icon(Icons.badge_outlined, size: 22, color: colors.primary),
+            leading:
+                Icon(Icons.badge_outlined, size: 22, color: colors.primary),
             title: '用户ID',
             trailing: Text(
               user.id.toString(),
-              style: theme.textTheme.bodyMedium?.copyWith(color: colors.textSecondary),
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(color: colors.textSecondary),
             ),
             showDivider: true,
           ),
           BentoListTile(
-            leading: Icon(Icons.account_circle_outlined, size: 22, color: colors.primary),
+            leading: Icon(Icons.account_circle_outlined,
+                size: 22, color: colors.primary),
             title: '账号',
             trailing: Text(
               user.username,
-              style: theme.textTheme.bodyMedium?.copyWith(color: colors.textSecondary),
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(color: colors.textSecondary),
             ),
             showDivider: true,
           ),
           BentoListTile(
-            leading: Icon(Icons.apartment_outlined, size: 22, color: colors.primary),
+            leading:
+                Icon(Icons.apartment_outlined, size: 22, color: colors.primary),
             title: '项目',
             trailing: Text(
               user.projectName ?? '未关联',
-              style: theme.textTheme.bodyMedium?.copyWith(color: colors.textSecondary),
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(color: colors.textSecondary),
             ),
             showDivider: true,
           ),
@@ -333,16 +360,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
             title: '手机号',
             trailing: Text(
               user.phone ?? '未绑定',
-              style: theme.textTheme.bodyMedium?.copyWith(color: colors.textSecondary),
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(color: colors.textSecondary),
             ),
             showDivider: true,
           ),
           BentoListTile(
-            leading: Icon(Icons.email_outlined, size: 22, color: colors.primary),
+            leading:
+                Icon(Icons.email_outlined, size: 22, color: colors.primary),
             title: '邮箱',
             trailing: Text(
               user.email ?? '未绑定',
-              style: theme.textTheme.bodyMedium?.copyWith(color: colors.textSecondary),
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(color: colors.textSecondary),
             ),
             showDivider: true,
           ),
@@ -354,7 +384,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 Text(
                   '修改密码',
-                  style: theme.textTheme.bodySmall?.copyWith(color: colors.textTertiary),
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: colors.textTertiary),
                 ),
                 const SizedBox(width: 4),
                 Icon(Icons.chevron_right, size: 18, color: colors.textTertiary),
@@ -363,7 +394,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const EditProfileScreen()),
+                MaterialPageRoute(
+                    builder: (context) => const EditProfileScreen()),
               );
             },
           ),
@@ -373,27 +405,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   /// 功能菜单卡片
-  Widget _buildMenuCard(BuildContext context, BentoColors colors, ThemeData theme, bool isGuest) {
+  Widget _buildMenuCard(
+      BuildContext context, BentoColors colors, ThemeData theme, bool isGuest) {
     return BentoCard(
       padding: EdgeInsets.zero,
       child: Column(
         children: [
           BentoListTile(
-            leading: Icon(Icons.notifications_outlined, size: 22, color: colors.primary),
+            leading: Icon(Icons.notifications_outlined,
+                size: 22, color: colors.primary),
             title: '消息中心',
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (_unreadCount > 0)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: colors.error,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
                       _unreadCount > 99 ? '99+' : '$_unreadCount',
-                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold),
                     ),
                   ),
                 const SizedBox(width: 8),
@@ -403,20 +441,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const NotificationScreen()),
+                MaterialPageRoute(
+                    builder: (context) => const NotificationScreen()),
               ).then((_) => _fetchUnreadCount());
             },
             showDivider: true,
           ),
           BentoListTile(
-            leading: Icon(Icons.palette_outlined, size: 22, color: colors.primary),
+            leading:
+                Icon(Icons.palette_outlined, size: 22, color: colors.primary),
             title: '外观设置',
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  Theme.of(context).brightness == Brightness.dark ? '深色模式' : '浅色模式',
-                  style: theme.textTheme.bodySmall?.copyWith(color: colors.textTertiary),
+                  Theme.of(context).brightness == Brightness.dark
+                      ? '深色模式'
+                      : '浅色模式',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: colors.textTertiary),
                 ),
                 const SizedBox(width: 4),
                 Icon(Icons.chevron_right, size: 18, color: colors.textTertiary),
@@ -429,21 +472,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
             showDivider: true,
           ),
           BentoListTile(
-            leading: Icon(Icons.cloud_off_outlined, size: 22, color: colors.warning),
+            leading:
+                Icon(Icons.cloud_off_outlined, size: 22, color: colors.warning),
             title: '离线打卡记录',
-            trailing: Icon(Icons.chevron_right, size: 18, color: colors.textTertiary),
+            trailing:
+                Icon(Icons.chevron_right, size: 18, color: colors.textTertiary),
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const OfflineCheckinsScreen()),
+                MaterialPageRoute(
+                    builder: (context) => const OfflineCheckinsScreen()),
               );
             },
             showDivider: true,
           ),
           BentoListTile(
-            leading: Icon(Icons.settings_outlined, size: 22, color: colors.primary),
+            leading:
+                Icon(Icons.settings_outlined, size: 22, color: colors.primary),
             title: '设置',
-            trailing: Icon(Icons.chevron_right, size: 18, color: colors.textTertiary),
+            trailing:
+                Icon(Icons.chevron_right, size: 18, color: colors.textTertiary),
             onTap: () {
               Navigator.push(
                 context,

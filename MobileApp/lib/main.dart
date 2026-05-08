@@ -23,6 +23,9 @@ import 'screens/login/login_screen.dart';
 import 'screens/main_navigation.dart';
 import 'screens/attendance/camera_checkin_screen.dart';
 import 'screens/attendance/local_album_screen.dart';
+import 'screens/approval/create_approval_screen.dart';
+import 'screens/approval/approval_list_screen.dart';
+import 'screens/calendar/attendance_calendar_screen.dart';
 import 'screens/track/track_screen.dart';
 import 'screens/offline/offline_checkins_screen.dart';
 import 'services/local_notification_service.dart';
@@ -33,6 +36,7 @@ import 'package:intl/date_symbol_data_local.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('zh_CN', null);
+  await ApiClient.loadRuntimeConfig();
   await LocalNotificationService().init();
   await GetuiPushService().init();
   runApp(const MyApp());
@@ -44,7 +48,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final apiClient = ApiClient();
-    
+
     // Repositories
     final projectRepo = ProjectRepository(apiClient: apiClient);
     final checkinRepo = CheckinRepository(apiClient: apiClient);
@@ -65,7 +69,8 @@ class MyApp extends StatelessWidget {
             create: (context) => ChatSettingsCubit(),
           ),
           BlocProvider<AuthBloc>(
-            create: (context) => AuthBloc(apiClient: apiClient)..add(AppStarted()),
+            create: (context) =>
+                AuthBloc(apiClient: apiClient)..add(AppStarted()),
           ),
           BlocProvider<TrackingBloc>(
             create: (context) => TrackingBloc(locationRepository: locationRepo),
@@ -88,17 +93,21 @@ class MyApp extends StatelessWidget {
         child: BlocBuilder<ThemeBloc, ThemeState>(
           builder: (context, themeState) {
             return MaterialApp(
-              title: 'Bento Attendance',
+              title: '境图考勤',
               debugShowCheckedModeBanner: false,
               theme: bentoLightTheme(),
               darkTheme: bentoDarkTheme(),
-              themeMode: themeState.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+              themeMode:
+                  themeState.isDarkMode ? ThemeMode.dark : ThemeMode.light,
               home: const AuthWrapper(),
               routes: {
                 '/camera_checkin': (context) => const CameraCheckinScreen(),
                 '/gallery': (context) => const LocalAlbumScreen(),
                 '/track': (context) => const TrackScreen(),
                 '/offline_checkins': (context) => const OfflineCheckinsScreen(),
+                '/approval': (context) => const ApprovalListScreen(),
+                '/approval/create': (context) => const CreateApprovalScreen(),
+                '/calendar': (context) => const AttendanceCalendarScreen(),
               },
             );
           },
@@ -131,7 +140,8 @@ class AuthWrapper extends StatelessWidget {
           return Scaffold(
             body: Center(
               child: CircularProgressIndicator(
-                color: Theme.of(context).extension<BentoColors>()?.primary ?? const Color(0xFF3B82F6),
+                color: Theme.of(context).extension<BentoColors>()?.primary ??
+                    const Color(0xFF3B82F6),
               ),
             ),
           );
@@ -139,12 +149,13 @@ class AuthWrapper extends StatelessWidget {
         if (state is AuthAuthenticated) {
           return const MainNavigation();
         }
-        
+
         if (state is AuthLoading) {
-           return Scaffold(
+          return Scaffold(
             body: Center(
               child: CircularProgressIndicator(
-                color: Theme.of(context).extension<BentoColors>()?.primary ?? const Color(0xFF3B82F6),
+                color: Theme.of(context).extension<BentoColors>()?.primary ??
+                    const Color(0xFF3B82F6),
               ),
             ),
           );

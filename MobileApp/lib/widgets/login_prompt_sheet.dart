@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../blocs/auth/auth_bloc.dart';
+import '../blocs/auth/auth_event.dart';
+import '../blocs/auth/auth_state.dart';
 import '../core/bento_colors.dart';
 import '../core/bento_typography.dart';
 import 'bento_widgets.dart';
@@ -68,7 +72,6 @@ class _LoginPromptContent extends StatelessWidget {
             fullWidth: true,
             onPressed: () {
               Navigator.of(context).pop(true);
-              // TODO: 导航到登录页或触发登录流程
             },
           ),
           const SizedBox(height: BentoSpacing.space8),
@@ -93,9 +96,11 @@ class _LoginPromptContent extends StatelessWidget {
 /// if (authorized) { ... }
 /// ```
 Future<bool> requireAuth(BuildContext context) async {
-  // TODO: 检查 AuthBloc 状态
-  // final authState = context.read<AuthBloc>().state;
-  // if (authState is AuthAuthenticated) return true;
-  // return await showLoginPromptSheet(context) ?? false;
-  return true; // 暂时默认通过
+  final authState = context.read<AuthBloc>().state;
+  if (authState is AuthAuthenticated) return true;
+  final wantsLogin = await showLoginPromptSheet(context) ?? false;
+  if (wantsLogin && context.mounted) {
+    context.read<AuthBloc>().add(LoggedOut());
+  }
+  return false;
 }
