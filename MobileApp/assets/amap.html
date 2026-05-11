@@ -15,13 +15,30 @@
 
   <!-- 高德 JS API 2.0 安全密钥配置（必须在加载API之前） -->
   <script type="text/javascript">
+    function postFlutterMessage(payload) {
+      if (window.FlutterChannel) {
+        window.FlutterChannel.postMessage(JSON.stringify(payload));
+      }
+    }
+
+    function reportMapError(message) {
+      postFlutterMessage({
+        type: 'mapError',
+        message: message || '地图加载失败'
+      });
+    }
+
     window._AMapSecurityConfig = {
       securityJsCode: 'c673cb06b1823f9e290ab592a2aeadd7',
     }
   </script>
 
   <!-- 高德 JS API 2.0 -->
-  <script type="text/javascript" src="https://webapi.amap.com/maps?v=2.0&key=__AMAP_WEB_KEY__&plugin=AMap.Geocoder"></script>
+  <script
+    type="text/javascript"
+    src="https://webapi.amap.com/maps?v=2.0&key=__AMAP_WEB_KEY__&plugin=AMap.Geocoder"
+    onerror="reportMapError('高德地图 JS API 加载失败，请检查网络和 AMAP_WEB_KEY')">
+  </script>
   <script>
     var map = null;
     var locationMarker = null;
@@ -32,59 +49,68 @@
 
     // ====== 初始化地图 ======
     function initMap(centerLng, centerLat, zoom) {
-      var mapOpts = {
-        zoom: zoom || 15,
-        resizeEnable: true,
-        rotateEnable: false,
-        pitchEnable: false,
-        viewMode: '2D',
-        mapStyle: 'amap://styles/normal',
-        features: ['bg', 'road', 'building', 'point']
-      };
-      // 只在有有效坐标时设置 center，否则使用高德 IP 定位
-      if (centerLng && centerLat) {
-        mapOpts.center = [centerLng, centerLat];
-      }
-      map = new AMap.Map('mapContainer', mapOpts);
+      try {
+        if (typeof AMap === 'undefined') {
+          reportMapError('高德地图 API 未加载，请检查 AMAP_WEB_KEY 和网络');
+          return;
+        }
 
-      // 如果没有传入初始坐标，尝试使用高德定位插件获取当前位置
-      if (!centerLng || !centerLat) {
-        AMap.plugin('AMap.Geolocation', function() {
-          var geolocation = new AMap.Geolocation({
-            enableHighAccuracy: true,
-            timeout: 10000,
-            zoomToAccuracy: true,
-            showButton: false,
-            showMarker: false,
-            showCircle: false,
-            GeoLocationFirst: true,
-            noIpLocate: 0,
-            needAddress: false,
-            extensions: 'base'
-          });
-          map.addControl(geolocation);
-          geolocation.getCurrentPosition(function(status, result) {
-            if (status === 'complete') {
-              var lng = result.position.getLng();
-              var lat = result.position.getLat();
-              map.setCenter([lng, lat]);
-              // 通知 Flutter 当前位置
-              if (window.FlutterChannel) {
-                window.FlutterChannel.postMessage(JSON.stringify({
+        var mapOpts = {
+          zoom: zoom || 15,
+          resizeEnable: true,
+          rotateEnable: false,
+          pitchEnable: false,
+          viewMode: '2D',
+          mapStyle: 'amap://styles/normal',
+          features: ['bg', 'road', 'building', 'point']
+        };
+        // 只在有有效坐标时设置 center，否则使用高德 IP 定位
+        if (centerLng && centerLat) {
+          mapOpts.center = [centerLng, centerLat];
+        }
+        map = new AMap.Map('mapContainer', mapOpts);
+
+        postFlutterMessage({ type: 'mapReady' });
+
+        // 如果没有传入初始坐标，尝试使用高德定位插件获取当前位置
+        if (!centerLng || !centerLat) {
+          AMap.plugin('AMap.Geolocation', function() {
+            var geolocation = new AMap.Geolocation({
+              enableHighAccuracy: true,
+              timeout: 10000,
+              zoomToAccuracy: true,
+              showButton: false,
+              showMarker: false,
+              showCircle: false,
+              GeoLocationFirst: true,
+              noIpLocate: 0,
+              needAddress: false,
+              extensions: 'base'
+            });
+            map.addControl(geolocation);
+            geolocation.getCurrentPosition(function(status, result) {
+              if (status === 'complete') {
+                var lng = result.position.getLng();
+                var lat = result.position.getLat();
+                map.setCenter([lng, lat]);
+                // 通知 Flutter 当前位置
+                postFlutterMessage({
                   type: 'ipLocation',
                   longitude: lng,
                   latitude: lat
-                }));
+                });
               }
-            }
+            });
           });
-        });
-      }
+        }
 
-      geocoder = new AMap.Geocoder({
-        radius: 1000,
-        extensions: 'base'
-      });
+        geocoder = new AMap.Geocoder({
+          radius: 1000,
+          extensions: 'base'
+        });
+      } catch (e) {
+        reportMapError(e && e.message ? e.message : '地图初始化失败');
+      }
     }
 
     // ====== 更新用户位置（蓝点 + 精度圈）======
@@ -220,10 +246,8 @@
 
     // ====== 地图加载完成通知 ======
     window.onload = function() {
-      if (window.FlutterChannel) {
-        window.FlutterChannel.postMessage(JSON.stringify({
-          type: 'mapReady'
-        }));
+      if (typeof AMap === 'undefined') {
+        reportMapError('高德地图 API 未加载，请检查 AMAP_WEB_KEY 和网络');
       }
     };
   </script>

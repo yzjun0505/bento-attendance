@@ -10,7 +10,10 @@
 
 ```bash
 flutter pub get
-flutter run --dart-define=SERVER_IP=192.168.1.10
+flutter run \
+  --dart-define=SERVER_IP=192.168.1.10 \
+  --dart-define=AMAP_WEB_KEY=你的高德WebJSKey \
+  --dart-define=AMAP_KEY=你的高德Web服务Key
 ```
 
 也可以直接指定完整地址：
@@ -19,7 +22,9 @@ flutter run --dart-define=SERVER_IP=192.168.1.10
 flutter run \
   --dart-define=API_BASE_URL=http://192.168.1.10:3000/api \
   --dart-define=OPENIM_API_URL=http://192.168.1.10:10002 \
-  --dart-define=OPENIM_WS_URL=ws://192.168.1.10:10001
+  --dart-define=OPENIM_WS_URL=ws://192.168.1.10:10001 \
+  --dart-define=AMAP_WEB_KEY=你的高德WebJSKey \
+  --dart-define=AMAP_KEY=你的高德Web服务Key
 ```
 
 ## 默认账号
@@ -37,7 +42,10 @@ App 内进入 `我的 -> 设置 -> 服务诊断` 可以查看当前 API/OpenIM �
 ```bash
 flutter analyze
 flutter test
-flutter build apk --dart-define=SERVER_IP=192.168.1.10
+flutter build apk \
+  --dart-define=SERVER_IP=192.168.1.10 \
+  --dart-define=AMAP_WEB_KEY=你的高德WebJSKey \
+  --dart-define=AMAP_KEY=你的高德Web服务Key
 ```
 
 ## 常见网络配置
@@ -46,3 +54,4 @@ flutter build apk --dart-define=SERVER_IP=192.168.1.10
 - iOS 模拟器、macOS、Windows、Linux：不传参数时默认使用 `127.0.0.1`。
 - Android 真机 USB：可执行 `adb reverse tcp:3000 tcp:3000` 后使用 `--dart-define=SERVER_IP=127.0.0.1`。
 - 同一 Wi-Fi 真机：使用电脑局域网 IP，例如 `--dart-define=SERVER_IP=192.168.1.10`。
+- 打卡页地图使用高德 Web JS API，必须传 `AMAP_WEB_KEY`；地址解析和周边地点使用高德 Web 服务 API，建议同时传 `AMAP_KEY`。

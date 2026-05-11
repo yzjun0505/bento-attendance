@@ -12,7 +12,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 /// 高德地图 Web JS API Key
 /// 请在运行时通过 --dart-define=AMAP_WEB_KEY=your_key 传入
-const _kAmapWebKey = String.fromEnvironment('AMAP_WEB_KEY', defaultValue: 'your_amap_web_key_here');
+const _kAmapWebKey = String.fromEnvironment('AMAP_WEB_KEY',
+    defaultValue: 'your_amap_web_key_here');
 
 /// 地图看板 — Tab 1
 /// 集成高德地图 + 围栏 + 打卡功能 + 多打卡类型 + 项目自动绑定
@@ -23,7 +24,8 @@ class MapDashboardScreen extends StatefulWidget {
   State<MapDashboardScreen> createState() => _MapDashboardScreenState();
 }
 
-class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticKeepAliveClientMixin {
+class _MapDashboardScreenState extends State<MapDashboardScreen>
+    with AutomaticKeepAliveClientMixin {
   final GlobalKey<_AMapWrapperState> _mapKey = GlobalKey();
 
   @override
@@ -57,7 +59,8 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
                     _AMapWrapper(
                       key: _mapKey,
                       state: state,
-                      isDarkMode: Theme.of(context).brightness == Brightness.dark,
+                      isDarkMode:
+                          Theme.of(context).brightness == Brightness.dark,
                     ),
                     // 透明顶栏
                     Positioned(
@@ -84,12 +87,14 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
                                   borderRadius: BorderRadius.circular(8),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.08),
+                                      color:
+                                          Colors.black.withValues(alpha: 0.08),
                                       blurRadius: 8,
                                     ),
                                   ],
                                 ),
-                                child: Icon(Icons.notifications_outlined, color: colors.textSecondary, size: 20),
+                                child: Icon(Icons.notifications_outlined,
+                                    color: colors.textSecondary, size: 20),
                               ),
                             ),
                             const Spacer(),
@@ -102,7 +107,8 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
                             const Spacer(),
                             // 定位按钮
                             GestureDetector(
-                              onTap: () => _mapKey.currentState?.moveToMyLocation(state),
+                              onTap: () =>
+                                  _mapKey.currentState?.moveToMyLocation(state),
                               behavior: HitTestBehavior.opaque,
                               child: Container(
                                 padding: const EdgeInsets.all(8),
@@ -111,12 +117,14 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
                                   borderRadius: BorderRadius.circular(8),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.08),
+                                      color:
+                                          Colors.black.withValues(alpha: 0.08),
                                       blurRadius: 8,
                                     ),
                                   ],
                                 ),
-                                child: Icon(Icons.my_location, color: colors.primary, size: 20),
+                                child: Icon(Icons.my_location,
+                                    color: colors.primary, size: 20),
                               ),
                             ),
                           ],
@@ -159,7 +167,8 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.location_on, size: 16, color: colors.primary),
+                          Icon(Icons.location_on,
+                              size: 16, color: colors.primary),
                           const SizedBox(width: 6),
                           Expanded(
                             child: GestureDetector(
@@ -168,27 +177,33 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
                                 children: [
                                   Expanded(
                                     child: Text(
-                                      state is AttendanceLoaded && state.currentAddress != null
+                                      state is AttendanceLoaded &&
+                                              state.currentAddress != null
                                           ? state.currentAddress!
                                           : '已获取位置',
-                                      style: theme.textTheme.bodySmall?.copyWith(
+                                      style:
+                                          theme.textTheme.bodySmall?.copyWith(
                                         color: colors.textSecondary,
                                       ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                  if (state is AttendanceLoaded && state.needsProjectConfirmation)
+                                  if (state is AttendanceLoaded &&
+                                      state.needsProjectConfirmation)
                                     Container(
                                       margin: const EdgeInsets.only(left: 6),
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 2),
                                       decoration: BoxDecoration(
-                                        color: colors.warning.withValues(alpha: 0.15),
+                                        color: colors.warning
+                                            .withValues(alpha: 0.15),
                                         borderRadius: BorderRadius.circular(4),
                                       ),
                                       child: Text(
                                         '选择项目',
-                                        style: theme.textTheme.labelSmall?.copyWith(
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
                                           color: colors.warning,
                                           fontSize: 10,
                                         ),
@@ -215,28 +230,33 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
                             horizontal: BentoSpacing.space20,
                             vertical: BentoSpacing.space4,
                           ),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
                           decoration: BoxDecoration(
                             color: colors.warning.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(BentoRadius.sm),
-                            border: Border.all(color: colors.warning.withValues(alpha: 0.3)),
+                            border: Border.all(
+                                color: colors.warning.withValues(alpha: 0.3)),
                           ),
                           child: GestureDetector(
-                            onTap: () => Navigator.pushNamed(context, '/offline_checkins'),
+                            onTap: () => Navigator.pushNamed(
+                                context, '/offline_checkins'),
                             child: Row(
                               children: [
-                                Icon(Icons.cloud_off, size: 16, color: colors.warning),
+                                Icon(Icons.cloud_off,
+                                    size: 16, color: colors.warning),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
-                                    '\${state.offlinePendingCount} 条打卡待同步',
+                                    '${state.offlinePendingCount} 条打卡待同步',
                                     style: theme.textTheme.bodySmall?.copyWith(
                                       color: colors.warning,
                                       fontWeight: FontWeight.w500,
                                     ),
                                   ),
                                 ),
-                                Icon(Icons.chevron_right, size: 16, color: colors.warning),
+                                Icon(Icons.chevron_right,
+                                    size: 16, color: colors.warning),
                               ],
                             ),
                           ),
@@ -255,20 +275,27 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           // 今日排班卡片
-                          if (state is AttendanceLoaded && state.todayShiftName != null)
+                          if (state is AttendanceLoaded &&
+                              state.todayShiftName != null)
                             Container(
                               width: double.infinity,
                               margin: const EdgeInsets.only(bottom: 12),
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 10),
                               decoration: BoxDecoration(
                                 color: (state.todayShiftColor != null
-                                    ? Color(int.parse(state.todayShiftColor!.replaceFirst('#', '0xFF')))
-                                    : colors.primary).withValues(alpha: 0.08),
+                                        ? Color(int.parse(state.todayShiftColor!
+                                            .replaceFirst('#', '0xFF')))
+                                        : colors.primary)
+                                    .withValues(alpha: 0.08),
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
                                   color: (state.todayShiftColor != null
-                                      ? Color(int.parse(state.todayShiftColor!.replaceFirst('#', '0xFF')))
-                                      : colors.primary).withValues(alpha: 0.2),
+                                          ? Color(int.parse(state
+                                              .todayShiftColor!
+                                              .replaceFirst('#', '0xFF')))
+                                          : colors.primary)
+                                      .withValues(alpha: 0.2),
                                 ),
                               ),
                               child: Row(
@@ -278,7 +305,9 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
                                     height: 32,
                                     decoration: BoxDecoration(
                                       color: state.todayShiftColor != null
-                                          ? Color(int.parse(state.todayShiftColor!.replaceFirst('#', '0xFF')))
+                                          ? Color(int.parse(state
+                                              .todayShiftColor!
+                                              .replaceFirst('#', '0xFF')))
                                           : colors.primary,
                                       borderRadius: BorderRadius.circular(3),
                                     ),
@@ -286,18 +315,21 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           '今日排班：${state.todayShiftName}',
-                                          style: theme.textTheme.bodyMedium?.copyWith(
+                                          style: theme.textTheme.bodyMedium
+                                              ?.copyWith(
                                             color: colors.textPrimary,
                                             fontWeight: FontWeight.w600,
                                           ),
                                         ),
                                         Text(
                                           '${state.todayShiftStart ?? '--:--'} - ${state.todayShiftEnd ?? '--:--'} · 迟到容忍 ${state.lateTolerance} 分钟',
-                                          style: theme.textTheme.bodySmall?.copyWith(
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(
                                             color: colors.textSecondary,
                                           ),
                                         ),
@@ -325,12 +357,16 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              if (state is AttendanceLoaded && state.attendanceGroupName != null && state.attendanceGroupName!.isNotEmpty) ...[
+                              if (state is AttendanceLoaded &&
+                                  state.attendanceGroupName != null &&
+                                  state.attendanceGroupName!.isNotEmpty) ...[
                                 const SizedBox(width: 8),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: colors.primary.withValues(alpha: 0.1),
+                                    color:
+                                        colors.primary.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
@@ -353,30 +389,40 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
                                   context: context,
                                   title: '上班',
                                   time: _getClockInTime(state),
-                                  scheduledTime: state is AttendanceLoaded ? state.workStartTime : null,
+                                  scheduledTime: state is AttendanceLoaded
+                                      ? state.workStartTime
+                                      : null,
                                   isCompleted: _isClockInCompleted(state),
-                                  isSubmitting: state is AttendanceLoaded && state.isSubmitting,
+                                  isSubmitting: state is AttendanceLoaded &&
+                                      state.isSubmitting,
                                   enabled: !_isClockInCompleted(state),
                                   colors: colors,
                                   theme: theme,
-                                  onTap: () => _handleCheckin(context, 'clock_in'),
+                                  onTap: () =>
+                                      _handleCheckin(context, 'clock_in'),
                                 ),
                               ),
                               const SizedBox(width: 16),
-                              _buildBigPhotoButton(context, state, colors, theme),
+                              _buildBigPhotoButton(
+                                  context, state, colors, theme),
                               const SizedBox(width: 16),
                               Expanded(
                                 child: _buildCheckinCard(
                                   context: context,
                                   title: '下班',
                                   time: _getClockOutTime(state),
-                                  scheduledTime: state is AttendanceLoaded ? state.workEndTime : null,
+                                  scheduledTime: state is AttendanceLoaded
+                                      ? state.workEndTime
+                                      : null,
                                   isCompleted: _isClockOutCompleted(state),
-                                  isSubmitting: state is AttendanceLoaded && state.isSubmitting,
-                                  enabled: _isClockInCompleted(state) && !_isClockOutCompleted(state),
+                                  isSubmitting: state is AttendanceLoaded &&
+                                      state.isSubmitting,
+                                  enabled: _isClockInCompleted(state) &&
+                                      !_isClockOutCompleted(state),
                                   colors: colors,
                                   theme: theme,
-                                  onTap: () => _handleCheckin(context, 'clock_out'),
+                                  onTap: () =>
+                                      _handleCheckin(context, 'clock_out'),
                                 ),
                               ),
                             ],
@@ -397,7 +443,8 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
   }
 
   /// 项目绑定提示条
-  Widget _buildProjectBindBar(AttendanceLoaded state, BentoColors colors, ThemeData theme) {
+  Widget _buildProjectBindBar(
+      AttendanceLoaded state, BentoColors colors, ThemeData theme) {
     String projectText;
     Color badgeColor;
     String badgeText;
@@ -460,7 +507,6 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
     );
   }
 
-
   /// 打卡信息面板
   void _showCheckinInfo(BuildContext context, AttendanceState state) {
     if (state is! AttendanceLoaded) return;
@@ -472,7 +518,8 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
       context: context,
       backgroundColor: colors.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(BentoRadius.lg)),
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(BentoRadius.lg)),
       ),
       builder: (ctx) {
         return Container(
@@ -505,45 +552,53 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
                 ),
               ),
               const SizedBox(height: 12),
-              _buildInfoRow('当前位置', s.currentAddress ?? '获取中...', colors, theme),
+              _buildInfoRow(
+                  '当前位置', s.currentAddress ?? '获取中...', colors, theme),
               _buildInfoRow(
                 '坐标',
                 s.currentLatitude != null
                     ? '${s.currentLatitude!.toStringAsFixed(6)}, ${s.currentLongitude!.toStringAsFixed(6)}'
                     : '获取中...',
-                colors, theme,
+                colors,
+                theme,
               ),
               _buildInfoRow(
                 '关联项目',
                 s.activeProjectName.isNotEmpty ? s.activeProjectName : '未绑定',
-                colors, theme,
+                colors,
+                theme,
               ),
               _buildInfoRow(
                 '围栏状态',
                 s.isInsideGeofence ? '围栏内 ✅' : '围栏外 ⚠️',
-                colors, theme,
+                colors,
+                theme,
               ),
               if (s.workStartTime != null)
                 _buildInfoRow(
                   '规定上班',
                   s.workStartTime!,
-                  colors, theme,
+                  colors,
+                  theme,
                 ),
               if (s.workEndTime != null)
                 _buildInfoRow(
                   '规定下班',
                   s.workEndTime!,
-                  colors, theme,
+                  colors,
+                  theme,
                 ),
               _buildInfoRow(
                 '今日上班',
                 _getClockInTime(s) != '未打卡' ? _getClockInTime(s) : '未打卡',
-                colors, theme,
+                colors,
+                theme,
               ),
               _buildInfoRow(
                 '今日下班',
                 _getClockOutTime(s) != '未打卡' ? _getClockOutTime(s) : '未打卡',
-                colors, theme,
+                colors,
+                theme,
               ),
               const SizedBox(height: 16),
             ],
@@ -553,7 +608,8 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
     );
   }
 
-  Widget _buildInfoRow(String label, String value, BentoColors colors, ThemeData theme) {
+  Widget _buildInfoRow(
+      String label, String value, BentoColors colors, ThemeData theme) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -588,15 +644,15 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
 
     final colors = context.colors;
     final theme = Theme.of(context);
-    final displayProjects = state.nearbyProjects.isNotEmpty
-        ? state.nearbyProjects
-        : state.projects;
+    final displayProjects =
+        state.nearbyProjects.isNotEmpty ? state.nearbyProjects : state.projects;
 
     showModalBottomSheet(
       context: context,
       backgroundColor: colors.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(BentoRadius.lg)),
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(BentoRadius.lg)),
       ),
       builder: (ctx) {
         return Container(
@@ -649,13 +705,19 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
                         width: 36,
                         height: 36,
                         decoration: BoxDecoration(
-                          color: (project.isInside == true ? colors.success : colors.primary)
+                          color: (project.isInside == true
+                                  ? colors.success
+                                  : colors.primary)
                               .withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Icon(
-                          project.isInside == true ? Icons.check_circle : Icons.folder_outlined,
-                          color: project.isInside == true ? colors.success : colors.primary,
+                          project.isInside == true
+                              ? Icons.check_circle
+                              : Icons.folder_outlined,
+                          color: project.isInside == true
+                              ? colors.success
+                              : colors.primary,
                           size: 20,
                         ),
                       ),
@@ -663,22 +725,27 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
                         project.name,
                         style: TextStyle(
                           color: isActive ? colors.primary : colors.textPrimary,
-                          fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                          fontWeight:
+                              isActive ? FontWeight.bold : FontWeight.normal,
                         ),
                       ),
                       subtitle: Text(
                         project.distanceText.isNotEmpty
                             ? '${project.distanceText} · ${project.address}'
                             : project.address,
-                        style: TextStyle(color: colors.textTertiary, fontSize: 12),
+                        style:
+                            TextStyle(color: colors.textTertiary, fontSize: 12),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       trailing: isActive
-                          ? Icon(Icons.check_circle, color: colors.primary, size: 20)
+                          ? Icon(Icons.check_circle,
+                              color: colors.primary, size: 20)
                           : null,
                       onTap: () {
-                        context.read<AttendanceBloc>().add(SelectProject(projectId: project.id));
+                        context
+                            .read<AttendanceBloc>()
+                            .add(SelectProject(projectId: project.id));
                         Navigator.pop(ctx);
                       },
                     );
@@ -703,17 +770,17 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
     return const BentoBadge.warning(text: '围栏外');
   }
 
-
   String _getClockInTime(AttendanceState state) {
     if (state is AttendanceLoaded) {
       final today = DateTime.now();
       final clockIn = state.recentHistory
           .where((c) => c.type == 'clock_in' || c.type == 'in')
           .where((c) {
-            final d = c.createdAt;
-            return d.year == today.year && d.month == today.month && d.day == today.day;
-          })
-          .firstOrNull;
+        final d = c.createdAt;
+        return d.year == today.year &&
+            d.month == today.month &&
+            d.day == today.day;
+      }).firstOrNull;
       if (clockIn != null) return clockIn.formattedTime;
     }
     return '未打卡';
@@ -725,10 +792,11 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
       final clockOut = state.recentHistory
           .where((c) => c.type == 'clock_out' || c.type == 'out')
           .where((c) {
-            final d = c.createdAt;
-            return d.year == today.year && d.month == today.month && d.day == today.day;
-          })
-          .firstOrNull;
+        final d = c.createdAt;
+        return d.year == today.year &&
+            d.month == today.month &&
+            d.day == today.day;
+      }).firstOrNull;
       if (clockOut != null) return clockOut.formattedTime;
     }
     return '未打卡';
@@ -738,11 +806,10 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
     if (state is AttendanceLoaded) {
       final today = DateTime.now();
       return state.recentHistory.any((c) =>
-        (c.type == 'clock_in' || c.type == 'in') &&
-        c.createdAt.year == today.year &&
-        c.createdAt.month == today.month &&
-        c.createdAt.day == today.day
-      );
+          (c.type == 'clock_in' || c.type == 'in') &&
+          c.createdAt.year == today.year &&
+          c.createdAt.month == today.month &&
+          c.createdAt.day == today.day);
     }
     return false;
   }
@@ -751,11 +818,10 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
     if (state is AttendanceLoaded) {
       final today = DateTime.now();
       return state.recentHistory.any((c) =>
-        (c.type == 'clock_out' || c.type == 'out') &&
-        c.createdAt.year == today.year &&
-        c.createdAt.month == today.month &&
-        c.createdAt.day == today.day
-      );
+          (c.type == 'clock_out' || c.type == 'out') &&
+          c.createdAt.year == today.year &&
+          c.createdAt.month == today.month &&
+          c.createdAt.day == today.day);
     }
     return false;
   }
@@ -860,7 +926,8 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
   }
 
   /// 打卡反馈提示条
-  Widget _buildCheckinFeedback(AttendanceLoaded state, BentoColors colors, ThemeData theme) {
+  Widget _buildCheckinFeedback(
+      AttendanceLoaded state, BentoColors colors, ThemeData theme) {
     final feedback = state.checkinFeedback!;
     final isSuccess = feedback.contains('成功');
     return Container(
@@ -870,10 +937,12 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: (isSuccess ? colors.success : colors.error).withValues(alpha: 0.1),
+        color:
+            (isSuccess ? colors.success : colors.error).withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(BentoRadius.sm),
         border: Border.all(
-          color: (isSuccess ? colors.success : colors.error).withValues(alpha: 0.3),
+          color: (isSuccess ? colors.success : colors.error)
+              .withValues(alpha: 0.3),
         ),
       ),
       child: Row(
@@ -899,13 +968,17 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
   }
 
   /// 大号水印拍照按钮
-  Widget _buildBigPhotoButton(BuildContext context, AttendanceState state, BentoColors colors, ThemeData theme) {
-    final isSubmitting = state is AttendanceLoaded && (state as AttendanceLoaded).isSubmitting;
+  Widget _buildBigPhotoButton(BuildContext context, AttendanceState state,
+      BentoColors colors, ThemeData theme) {
+    final isSubmitting =
+        state is AttendanceLoaded && (state as AttendanceLoaded).isSubmitting;
 
     return GestureDetector(
-      onTap: isSubmitting ? null : () {
-        Navigator.of(context).pushNamed('/camera_checkin');
-      },
+      onTap: isSubmitting
+          ? null
+          : () {
+              Navigator.of(context).pushNamed('/camera_checkin');
+            },
       child: Container(
         width: 88,
         height: 88,
@@ -931,7 +1004,8 @@ class _MapDashboardScreenState extends State<MapDashboardScreen> with AutomaticK
                   height: 28,
                   child: CircularProgressIndicator(
                     strokeWidth: 2.5,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white.withValues(alpha: 0.8)),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                        Colors.white.withValues(alpha: 0.8)),
                   ),
                 ),
               )
@@ -1014,7 +1088,8 @@ class _AMapWrapperState extends State<_AMapWrapper> {
       final lastPos = await Geolocator.getLastKnownPosition();
       if (lastPos != null && mounted) {
         // GPS 原始坐标 WGS84 → GCJ02
-        final gcj = CoordUtils.wgs84ToGcj02(lastPos.latitude, lastPos.longitude);
+        final gcj =
+            CoordUtils.wgs84ToGcj02(lastPos.latitude, lastPos.longitude);
         setState(() {
           _cachedLat ??= gcj['latitude'];
           _cachedLng ??= gcj['longitude'];
@@ -1054,7 +1129,9 @@ class _AMapWrapperState extends State<_AMapWrapper> {
         );
         _hasSyncedLocation = true;
       }
-    } else if (!_hasSyncedLocation && _cachedLat != null && _cachedLng != null) {
+    } else if (!_hasSyncedLocation &&
+        _cachedLat != null &&
+        _cachedLng != null) {
       // bloc 还没拿到 GPS，但设备有缓存位置 → 先用缓存位置移动地图
       _mapController.moveToLocation(_cachedLng!, _cachedLat!, zoom: 15);
     }
@@ -1090,25 +1167,70 @@ class _AMapWrapperState extends State<_AMapWrapper> {
     _mapController.setMapStyle(widget.isDarkMode);
   }
 
+  Future<Position?> _getCurrentPosition() async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return null;
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      return null;
+    }
+
+    try {
+      return await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        forceAndroidLocationManager: true,
+        timeLimit: const Duration(seconds: 8),
+      );
+    } catch (e) {
+      debugPrint('定位按钮获取当前位置失败: $e');
+      return Geolocator.getLastKnownPosition();
+    }
+  }
+
+  void _moveMapTo(double lng, double lat, {double zoom = 16}) {
+    _mapController.updateLocation(lng, lat, accuracy: 50);
+    _mapController.moveToLocation(lng, lat, zoom: zoom);
+  }
+
   /// 定位到当前位置
-  void moveToMyLocation(AttendanceState state) {
+  Future<void> moveToMyLocation(AttendanceState state) async {
     if (state is AttendanceLoaded &&
         state.currentLatitude != null &&
         state.currentLongitude != null) {
-      _mapController.moveToLocation(
-        state.currentLongitude!,
-        state.currentLatitude!,
-        zoom: 16,
-      );
-    } else {
-      // 没有位置数据时，触发 BLoC 重新获取位置
-      if (state is AttendanceLoaded) {
-        // 尝试用 JS 端的 IP 定位结果
-        _mapController.onIpLocation = (lng, lat) {
-          _mapController.moveToLocation(lng, lat, zoom: 16);
-        };
-      }
+      _moveMapTo(state.currentLongitude!, state.currentLatitude!);
+    } else if (_cachedLat != null && _cachedLng != null) {
+      _moveMapTo(_cachedLng!, _cachedLat!);
     }
+
+    final position = await _getCurrentPosition();
+    if (!mounted) return;
+
+    if (position == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('无法获取当前位置，请检查定位权限和GPS开关')),
+      );
+      return;
+    }
+
+    final gcj = CoordUtils.wgs84ToGcj02(position.latitude, position.longitude);
+    final lat = gcj['latitude'];
+    final lng = gcj['longitude'];
+    if (lat == null || lng == null) return;
+
+    setState(() {
+      _cachedLat = lat;
+      _cachedLng = lng;
+      _hasSyncedLocation = true;
+    });
+    _moveMapTo(lng, lat);
+
+    final attendanceBloc = context.read<AttendanceBloc>();
+    attendanceBloc.add(UpdateCurrentLocation(latitude: lat, longitude: lng));
   }
 
   @override
