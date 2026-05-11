@@ -59,6 +59,51 @@ async function syncOfflineCheckins(req, res) {
   try {
     const db = getPool();
     const userId = req.user.id;
+    const clientCheckins = Array.isArray(req.body?.checkins) ? req.body.checkins : [];
+
+    // 移动端离线缓存保存在设备本地，同步时会直接提交 checkins 列表。
+    // 必须消费这个列表，否则客户端可能误以为同步成功并清空本地待同步数据。
+    if (clientCheckins.length > 0) {
+      const connection = await db.getConnection();
+      try {
+        await connection.beginTransaction();
+
+        for (const item of clientCheckins) {
+          if (!item?.type || !item?.local_timestamp) {
+            throw new Error('离线打卡数据缺少类型或本地时间');
+          }
+
+          await connection.execute(
+            `INSERT INTO checkins (user_id, project_id, type, latitude, longitude, address, photo, remark, watermark_code, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              userId,
+              item.project_id || null,
+              item.type,
+              item.latitude || null,
+              item.longitude || null,
+              item.address || '',
+              item.photo || '',
+              item.remark || '',
+              item.watermark_code || null,
+              item.local_timestamp,
+            ]
+          );
+        }
+
+        await connection.commit();
+        return res.json(successResponse(
+          { synced: clientCheckins.length, synced_count: clientCheckins.length, failed: 0, total: clientCheckins.length },
+          `同步完成：成功 ${clientCheckins.length} 条，失败 0 条`
+        ));
+      } catch (err) {
+        await connection.rollback();
+        logger.warn('同步客户端离线打卡失败', { error: err.message, userId });
+        return res.status(400).json(errorResponse(`同步失败：${err.message}`, 400));
+      } finally {
+        connection.release();
+      }
+    }
 
     // 获取未同步的离线打卡
     const [offlineRows] = await db.execute(

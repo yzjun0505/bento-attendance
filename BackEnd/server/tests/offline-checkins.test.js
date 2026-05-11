@@ -129,6 +129,32 @@ describe('离线打卡 API 测试', () => {
       expect(res.body.data.synced).toBe(0);
     });
 
+    test('同步移动端本地缓存列表到正式记录', async () => {
+      const localTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      const res = await request(app)
+        .post('/api/offline-checkins/sync')
+        .set('Authorization', `Bearer ${workerToken}`)
+        .send({
+          checkins: [
+            {
+              local_id: `mobile-${Date.now()}`,
+              type: 'clock_out',
+              latitude: 39.9042,
+              longitude: 116.4074,
+              address: '北京市移动端离线缓存',
+              remark: '移动端缓存同步',
+              local_timestamp: localTime
+            }
+          ]
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.code).toBe(200);
+      expect(res.body.data.synced).toBe(1);
+      expect(res.body.data.failed).toBe(0);
+      expect(res.body.data.synced_count).toBe(1);
+    });
+
     test('未登录返回 401', async () => {
       const res = await request(app).post('/api/offline-checkins/sync');
       expect(res.status).toBe(401);

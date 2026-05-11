@@ -40,10 +40,18 @@ class OfflineCheckinRepository {
         'checkins': cached,
       });
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        // 同步成功后清空本地缓存
+        final data = response.data['data'] as Map<String, dynamic>? ?? {};
+        final synced =
+            data['synced_count'] as int? ?? data['synced'] as int? ?? 0;
+        final failed = data['failed'] as int? ?? 0;
+        if (synced < cached.length || failed > 0) {
+          throw Exception('同步未完成：成功 $synced 条，失败 $failed 条');
+        }
+
+        // 只有后端确认本机缓存全部入库后才清空本地缓存，避免误删待同步数据。
         final prefs = await SharedPreferences.getInstance();
         await prefs.remove(_cacheKey);
-        return response.data['data']?['synced_count'] as int? ?? cached.length;
+        return synced;
       }
       throw Exception('同步失败');
     } catch (e) {
@@ -59,15 +67,21 @@ class OfflineCheckinRepository {
     required String address,
     String? photo,
     int? projectId,
+    String? remark,
+    String? watermarkCode,
   }) {
     return {
+      'local_id': DateTime.now().microsecondsSinceEpoch.toString(),
       'type': type,
       'latitude': latitude,
       'longitude': longitude,
       'address': address,
       'photo': photo,
       'project_id': projectId,
-      'local_timestamp': DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now()),
+      'remark': remark,
+      'watermark_code': watermarkCode,
+      'local_timestamp':
+          DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now()),
     };
   }
 }

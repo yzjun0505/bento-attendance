@@ -37,7 +37,8 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
   final CheckinRepository checkinRepository;
   final CheckinTypeRepository checkinTypeRepository;
   final ScheduleRepository _scheduleRepository = ScheduleRepository();
-  final OfflineCheckinRepository _offlineRepository = OfflineCheckinRepository();
+  final OfflineCheckinRepository _offlineRepository =
+      OfflineCheckinRepository();
   final ApiClient _apiClient = ApiClient();
 
   AttendanceBloc({
@@ -84,7 +85,7 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
   Future<void> _onLoadAttendanceData(
       LoadAttendanceData event, Emitter<AttendanceState> emit) async {
     final bool isFirstLoad = state is! AttendanceLoaded;
-    
+
     // 仅在首次加载或没有数据时显示 Loading
     if (isFirstLoad) {
       emit(AttendanceLoading());
@@ -140,8 +141,11 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
 
       // 从今日排班中提取班次信息
       String? shiftName = todaySchedule?['shift_name'] as String?;
-      String? shiftStart = _formatTime(todaySchedule?['start_time'] as String?) ?? groupInfo?.startTime;
-      String? shiftEnd = _formatTime(todaySchedule?['end_time'] as String?) ?? groupInfo?.endTime;
+      String? shiftStart =
+          _formatTime(todaySchedule?['start_time'] as String?) ??
+              groupInfo?.startTime;
+      String? shiftEnd = _formatTime(todaySchedule?['end_time'] as String?) ??
+          groupInfo?.endTime;
       String? shiftColor = todaySchedule?['color'] as String?;
 
       emit(AttendanceLoaded(
@@ -173,7 +177,8 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
   }
 
   /// 异步更新位置信息并触发新的 Loaded 状态
-  Future<void> _refreshLocation(List<Project> projects, List<Checkin> history, List<CheckinType> checkinTypes) async {
+  Future<void> _refreshLocation(List<Project> projects, List<Checkin> history,
+      List<CheckinType> checkinTypes) async {
     Position? position;
     try {
       debugPrint('>>> [Async] 开始获取定位...');
@@ -181,8 +186,9 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
-      
-      if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
+
+      if (permission == LocationPermission.whileInUse ||
+          permission == LocationPermission.always) {
         // 使用较短的超时，如果拿不到精确定位就先不更新
         final rawPos = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high,
@@ -235,10 +241,12 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
           radius: 2000,
         );
       } catch (_) {
-        nearbyProjects = _findNearbyProjectsFromCoords(event.latitude, event.longitude, currentState.projects);
+        nearbyProjects = _findNearbyProjectsFromCoords(
+            event.latitude, event.longitude, currentState.projects);
       }
 
-      final insideProjects = nearbyProjects.where((p) => p.isInside == true).toList();
+      final insideProjects =
+          nearbyProjects.where((p) => p.isInside == true).toList();
 
       if (insideProjects.length == 1) {
         nearest = insideProjects.first;
@@ -284,8 +292,9 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
       SubmitCheckin event, Emitter<AttendanceState> emit) async {
     if (state is AttendanceLoaded) {
       final currentState = state as AttendanceLoaded;
-      
-      if (currentState.currentLatitude == null || currentState.currentLongitude == null) {
+
+      if (currentState.currentLatitude == null ||
+          currentState.currentLongitude == null) {
         emit(currentState.copyWith(
           checkinFeedback: '无法获取当前位置，请开启GPS后重试',
         ));
@@ -312,7 +321,9 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
           latitude: currentState.currentLatitude!,
           longitude: currentState.currentLongitude!,
           address: currentState.currentAddress ?? '',
-          projectId: event.projectId ?? currentState.selectedProjectId ?? currentState.nearestProject?.id,
+          projectId: event.projectId ??
+              currentState.selectedProjectId ??
+              currentState.nearestProject?.id,
           remark: event.remark,
           photo: photoUrl,
           watermarkCode: event.watermarkCode,
@@ -321,9 +332,10 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
         // 打卡成功反馈
         emit(currentState.copyWith(
           isSubmitting: false,
-          checkinFeedback: !currentState.isInsideGeofence ? '打卡成功（围栏外）' : '打卡成功',
+          checkinFeedback:
+              !currentState.isInsideGeofence ? '打卡成功（围栏外）' : '打卡成功',
         ));
-        
+
         // 2秒后清除反馈并重新加载数据
         await Future.delayed(const Duration(seconds: 2));
         add(LoadAttendanceData());
@@ -331,8 +343,8 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
         // 检查是否为网络异常，如果是则缓存离线打卡
         final isNetworkError = e is DioException &&
             (e.type == DioExceptionType.connectionError ||
-             e.type == DioExceptionType.connectionTimeout ||
-             e.type == DioExceptionType.receiveTimeout);
+                e.type == DioExceptionType.connectionTimeout ||
+                e.type == DioExceptionType.receiveTimeout);
 
         if (isNetworkError) {
           try {
@@ -343,7 +355,11 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
                 longitude: currentState.currentLongitude!,
                 address: currentState.currentAddress ?? '',
                 photo: photoUrl,
-                projectId: event.projectId ?? currentState.selectedProjectId ?? currentState.nearestProject?.id,
+                projectId: event.projectId ??
+                    currentState.selectedProjectId ??
+                    currentState.nearestProject?.id,
+                remark: event.remark,
+                watermarkCode: event.watermarkCode,
               ),
             );
             final newCount = await _offlineRepository.getCachedCount();
@@ -400,11 +416,13 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
     return _findNearbyProjectsFromCoords(pos.latitude, pos.longitude, projects);
   }
 
-  List<Project> _findNearbyProjectsFromCoords(double lat, double lng, List<Project> projects) {
+  List<Project> _findNearbyProjectsFromCoords(
+      double lat, double lng, List<Project> projects) {
     final nearby = <Project>[];
     for (final project in projects) {
       if (project.latitude != null && project.longitude != null) {
-        final dist = Geolocator.distanceBetween(lat, lng, project.latitude!, project.longitude!);
+        final dist = Geolocator.distanceBetween(
+            lat, lng, project.latitude!, project.longitude!);
         if (dist <= 2000) {
           nearby.add(Project(
             id: project.id,
@@ -427,7 +445,7 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
   double? _calcDistance(Position pos, Project project) {
     if (project.latitude != null && project.longitude != null) {
       return Geolocator.distanceBetween(
-        pos.latitude, pos.longitude, project.latitude!, project.longitude!);
+          pos.latitude, pos.longitude, project.latitude!, project.longitude!);
     }
     return null;
   }
