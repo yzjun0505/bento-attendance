@@ -1,0 +1,9 @@
+server/node_modules
+server/logs
+server/uploads
+server/database.sqlite
+web-admin/node_modules
+web-admin/dist
+mysql_data
+*.log
+.DS_Store

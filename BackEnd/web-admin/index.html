@@ -9,11 +9,11 @@
     <!-- 高德地图API配置 - 安全密钥必须最先加载 -->
     <script type="text/javascript">
         window._AMapSecurityConfig = {
-            securityJsCode: 'c673cb06b1823f9e290ab592a2eaadd7',
+            securityJsCode: '%VITE_AMAP_SECURITY_CODE%',
         }
     </script>
     <!-- 高德地图 JS API 2.0 -->
-    <script src="https://webapi.amap.com/maps?v=2.0&key=your_amap_web_key_here&plugin=AMap.PlaceSearch,AMap.CitySearch,AMap.Scale,AMap.ToolBar"></script>
+    <script src="https://webapi.amap.com/maps?v=2.0&key=%VITE_AMAP_WEB_KEY%&plugin=AMap.PlaceSearch,AMap.CitySearch,AMap.Scale,AMap.ToolBar"></script>
     <script>
       (function() {
         var savedTheme = localStorage.getItem('theme-dark');

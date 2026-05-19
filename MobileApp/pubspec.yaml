@@ -1,6 +1,6 @@
 name: jingmap_app
 description: 境图 - 极简考勤定位系统
-version: 1.0.0+1
+version: 1.0.5+6
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -23,6 +23,9 @@ dependencies:
   path_provider: ^2.1.2
   camera: ^0.11.0
   connectivity_plus: ^7.1.0
+  package_info_plus: ^8.0.2
+  url_launcher: ^6.3.0
+  open_filex: ^4.7.0
   gal: ^2.3.2
   uuid: ^4.0.0
   table_calendar: ^3.1.2

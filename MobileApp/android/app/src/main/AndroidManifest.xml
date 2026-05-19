@@ -11,6 +11,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     
     <!-- 相机和存储权限 -->
     <uses-permission android:name="android.permission.CAMERA" />
@@ -29,7 +30,7 @@
         <!-- 高德地图 Key 配置 -->
         <meta-data
             android:name="com.amap.api.v2.apikey"
-            android:value="a3b83561d4e3f6a9a99734716903d73f" />
+            android:value="8d514aacfa894ca86730b0288008fe4f" />
 
         <!-- 定位服务 -->
         <service android:name="com.amap.api.location.APSService" />

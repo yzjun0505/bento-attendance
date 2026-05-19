@@ -5,6 +5,7 @@
 const { getPool } = require('../models/db');
 const { successResponse, errorResponse } = require('../utils/helpers');
 const logger = require('../utils/logger');
+const checkinService = require('../services/checkinService');
 
 /**
  * 提交离线打卡缓存
@@ -64,44 +65,37 @@ async function syncOfflineCheckins(req, res) {
     // 移动端离线缓存保存在设备本地，同步时会直接提交 checkins 列表。
     // 必须消费这个列表，否则客户端可能误以为同步成功并清空本地待同步数据。
     if (clientCheckins.length > 0) {
-      const connection = await db.getConnection();
       try {
-        await connection.beginTransaction();
-
-        for (const item of clientCheckins) {
-          if (!item?.type || !item?.local_timestamp) {
-            throw new Error('离线打卡数据缺少类型或本地时间');
-          }
-
-          await connection.execute(
-            `INSERT INTO checkins (user_id, project_id, type, latitude, longitude, address, photo, remark, watermark_code, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-              userId,
-              item.project_id || null,
-              item.type,
-              item.latitude || null,
-              item.longitude || null,
-              item.address || '',
-              item.photo || '',
-              item.remark || '',
-              item.watermark_code || null,
-              item.local_timestamp,
-            ]
-          );
-        }
-
-        await connection.commit();
+        const inserted = await checkinService.createCheckinsBatch(db, {
+          userId,
+          checkins: clientCheckins,
+          source: 'offline',
+        });
+        await checkinService.notifyOfflineSyncResult(db, {
+          userId,
+          synced: inserted.length,
+          failed: 0,
+          total: clientCheckins.length,
+        });
         return res.json(successResponse(
-          { synced: clientCheckins.length, synced_count: clientCheckins.length, failed: 0, total: clientCheckins.length },
-          `同步完成：成功 ${clientCheckins.length} 条，失败 0 条`
+          {
+            synced: inserted.length,
+            synced_count: inserted.length,
+            failed: 0,
+            total: clientCheckins.length,
+            approval_count: inserted.filter((item) => item.approval_request_id).length,
+          },
+          `同步完成：成功 ${inserted.length} 条，失败 0 条`
         ));
       } catch (err) {
-        await connection.rollback();
         logger.warn('同步客户端离线打卡失败', { error: err.message, userId });
-        return res.status(400).json(errorResponse(`同步失败：${err.message}`, 400));
-      } finally {
-        connection.release();
+        await checkinService.notifyOfflineSyncResult(db, {
+          userId,
+          synced: 0,
+          failed: clientCheckins.length,
+          total: clientCheckins.length,
+        });
+        return res.status(err.status || 400).json(errorResponse(`同步失败：${err.message}`, err.status || 400));
       }
     }
 
@@ -117,15 +111,15 @@ async function syncOfflineCheckins(req, res) {
 
     let synced = 0;
     let failed = 0;
+    let approvalCount = 0;
 
     for (const oc of offlineRows) {
       try {
-        // 写入正式打卡表
-        await db.execute(
-          `INSERT INTO checkins (user_id, project_id, type, latitude, longitude, address, photo, remark, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [oc.user_id, oc.project_id, oc.type, oc.latitude, oc.longitude, oc.address, oc.photo, oc.remark, oc.local_timestamp]
-        );
+        const [inserted] = await checkinService.createCheckinsBatch(db, {
+          userId: oc.user_id,
+          checkins: [oc],
+          source: 'offline',
+        });
 
         // 标记为已同步
         await db.execute(
@@ -133,13 +127,24 @@ async function syncOfflineCheckins(req, res) {
           [oc.id]
         );
         synced++;
+        if (inserted?.approval_request_id) approvalCount++;
       } catch (err) {
         logger.warn('同步单条离线打卡失败', { error: err.message, offlineId: oc.id });
         failed++;
       }
     }
 
-    res.json(successResponse({ synced, failed, total: offlineRows.length }, `同步完成：成功 ${synced} 条，失败 ${failed} 条`));
+    await checkinService.notifyOfflineSyncResult(db, {
+      userId,
+      synced,
+      failed,
+      total: offlineRows.length,
+    });
+
+    res.json(successResponse(
+      { synced, failed, total: offlineRows.length, approval_count: approvalCount },
+      `同步完成：成功 ${synced} 条，失败 ${failed} 条`
+    ));
   } catch (err) {
     logger.error('同步离线打卡失败', { error: err.message });
     res.status(500).json(errorResponse('服务器错误'));

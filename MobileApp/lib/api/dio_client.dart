@@ -19,6 +19,22 @@ class ApiClient {
     final prefs = await SharedPreferences.getInstance();
     _runtimeApiBaseUrl = prefs.getString(_runtimeApiBaseUrlKey);
     _runtimeServerIp = prefs.getString(_runtimeServerIpKey);
+
+    const packagedApiBaseUrl = String.fromEnvironment('API_BASE_URL');
+    if (packagedApiBaseUrl.isNotEmpty &&
+        _runtimeApiBaseUrl != null &&
+        _runtimeApiBaseUrl!.isNotEmpty) {
+      final normalizedPackaged = normalizeApiBaseUrl(packagedApiBaseUrl);
+      final storedHost = Uri.tryParse(_runtimeApiBaseUrl!)?.host ?? '';
+      final packagedHost = Uri.tryParse(normalizedPackaged)?.host ?? '';
+      if (_isPrivateOrLocalHost(storedHost) &&
+          !_isPrivateOrLocalHost(packagedHost)) {
+        _runtimeApiBaseUrl = normalizedPackaged;
+        _runtimeServerIp = packagedHost;
+        await prefs.setString(_runtimeApiBaseUrlKey, normalizedPackaged);
+        await prefs.setString(_runtimeServerIpKey, packagedHost);
+      }
+    }
   }
 
   static Future<void> saveRuntimeApiBaseUrl(String value) async {
@@ -67,6 +83,23 @@ class ApiClient {
       return Uri.parse(_runtimeApiBaseUrl!).host;
     }
     return serverIp;
+  }
+
+  static bool _isPrivateOrLocalHost(String host) {
+    final value = host.trim().toLowerCase();
+    if (value.isEmpty) return false;
+    if (value == 'localhost' || value == '127.0.0.1' || value == '10.0.2.2') {
+      return true;
+    }
+    if (value.startsWith('10.')) return true;
+    if (value.startsWith('192.168.')) return true;
+
+    final parts = value.split('.');
+    if (parts.length == 4 && parts.first == '172') {
+      final second = int.tryParse(parts[1]);
+      return second != null && second >= 16 && second <= 31;
+    }
+    return false;
   }
 
   // --- 统一服务器 IP 配置 ---

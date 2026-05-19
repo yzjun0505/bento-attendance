@@ -22,7 +22,7 @@
         <div class="card-thumbnail">
           <div class="card-preview-canvas">
             <div class="card-preview-frame">
-              <div class="card-preview-watermark" :class="getWatermarkPresetClass(item.schema, true)" :style="getWatermarkSurfaceStyle(item.schema, true)">
+              <div class="card-preview-watermark" :class="getWatermarkPresetClass(item.schema, true)" :style="getWatermarkRenderStyle(item.schema, true)">
                 <div class="card-preview-title" :style="getTemplateSlotStyle(item, 'title')">
                   {{ getTemplateSlotText(item, 'title', getWatermarkTitle(item)) }}
                 </div>
@@ -121,7 +121,7 @@
               <div class="iphone-screen" :class="'scene-' + globalSettings.scene">
                 <div class="iphone-camera-overlay" :style="{ backgroundColor: globalSettings.scene === 'solid' ? globalSettings.bgColor : 'transparent' }"></div>
                 <div class="preview-content">
-                  <div class="preview-watermark" :class="getWatermarkPresetClass(currentConfig.schema)" :style="getWatermarkSurfaceStyle(currentConfig.schema)">
+                  <div class="preview-watermark" :class="getWatermarkPresetClass(currentConfig.schema)" :style="getWatermarkRenderStyle(currentConfig.schema)">
                     <div class="preview-title" :style="getSlotStyle('title')">{{ getSlotText('title', currentConfig.title || currentConfig.name || '水印名称') }}</div>
                     <div class="preview-subtitle" :style="getSlotStyle('subtitle')">{{ getSlotText('subtitle', '2026-04-23 12:00:00') }}</div>
                     <div class="preview-fields">
@@ -377,7 +377,24 @@ const createDefaultCustomSlots = () => ([
   { id: '3', label: '位置', type: '地理位置' }
 ])
 
+const createDefaultLayout = () => ({
+  version: 2,
+  designCanvas: { width: 1080, height: 1920 },
+  referenceWidth: 390,
+  surface: {
+    x: 0.08,
+    y: 0.68,
+    width: 0.72,
+    padding: 16,
+    lineHeight: 1.6,
+    radius: 12
+  }
+})
+
 const createDefaultSchema = () => ({
+  version: 2,
+  designCanvas: { width: 1080, height: 1920 },
+  layout: createDefaultLayout(),
   skeletonPreset: defaultSkeletonPresetId,
   customSlots: createDefaultCustomSlots(),
   slots: {}
@@ -415,8 +432,44 @@ const normalizeBindingValue = (binding) => {
   return bindingAliasMap[binding] || binding
 }
 
+const toNumberInRange = (value, fallback, min, max) => {
+  const num = Number(value)
+  if (!Number.isFinite(num)) return fallback
+  return Math.max(min, Math.min(max, num))
+}
+
+const normalizeLayout = (layout = {}) => {
+  const defaults = createDefaultLayout()
+  const source = layout && typeof layout === 'object' ? layout : {}
+  const surface = source.surface && typeof source.surface === 'object' ? source.surface : {}
+
+  return {
+    ...defaults,
+    ...source,
+    version: 2,
+    designCanvas: {
+      width: toNumberInRange(source.designCanvas?.width, 1080, 1, 4096),
+      height: toNumberInRange(source.designCanvas?.height, 1920, 1, 4096)
+    },
+    referenceWidth: toNumberInRange(source.referenceWidth, 390, 240, 1024),
+    surface: {
+      ...defaults.surface,
+      ...surface,
+      x: toNumberInRange(surface.x, defaults.surface.x, 0, 1),
+      y: toNumberInRange(surface.y, defaults.surface.y, 0, 1),
+      width: toNumberInRange(surface.width, defaults.surface.width, 0.2, 1),
+      padding: toNumberInRange(surface.padding, defaults.surface.padding, 0, 80),
+      lineHeight: toNumberInRange(surface.lineHeight, defaults.surface.lineHeight, 1, 2.4),
+      radius: toNumberInRange(surface.radius, defaults.surface.radius, 0, 48)
+    }
+  }
+}
+
 const normalizeLoadedSchema = (schemaSource) => {
   const schema = isEditorSchema(schemaSource) ? cloneDeep(schemaSource) : createDefaultSchema()
+  schema.version = 2
+  schema.designCanvas = schema.designCanvas || { width: 1080, height: 1920 }
+  schema.layout = normalizeLayout(schema.layout)
   const presetExists = skeletonPresets.some(preset => preset.id === schema.skeletonPreset)
   schema.skeletonPreset = presetExists ? schema.skeletonPreset : defaultSkeletonPresetId
   if (!Array.isArray(schema.customSlots)) schema.customSlots = []
@@ -537,6 +590,9 @@ const createDefaultSlotConfig = (overrides = {}) => {
 
 const normalizeSchema = () => {
   const schema = (currentConfig.value.schema ||= {})
+  schema.version = 2
+  schema.designCanvas = schema.designCanvas || { width: 1080, height: 1920 }
+  schema.layout = normalizeLayout(schema.layout)
   const presetExists = skeletonPresets.some(preset => preset.id === schema.skeletonPreset)
   schema.skeletonPreset = presetExists ? schema.skeletonPreset : defaultSkeletonPresetId
   if (!Array.isArray(schema.customSlots)) schema.customSlots = []
@@ -903,6 +959,39 @@ const getWatermarkSurfaceStyle = (schema, isCard = false) => {
     boxShadow: isCard ? '0 4px 12px rgba(0,0,0,0.16)' : '0 10px 26px rgba(0,0,0,0.18)',
     padding: `${Math.round(12 * paddingScale)}px`,
     borderRadius: `${Math.round(12 * paddingScale)}px`
+  }
+}
+
+const getWatermarkPlacementStyle = (schema, isCard = false) => {
+  const layout = normalizeLayout(schema?.layout)
+  const surface = layout.surface
+  const width = surface.width * 100
+  const left = surface.x * 100
+  const top = surface.y * 100
+
+  return {
+    position: 'absolute',
+    left: `${left}%`,
+    top: `${top}%`,
+    right: 'auto',
+    bottom: 'auto',
+    width: `${width}%`,
+    maxWidth: `${Math.max(20, 100 - left)}%`,
+    boxSizing: 'border-box',
+    lineHeight: surface.lineHeight,
+    transformOrigin: 'top left',
+    ...(isCard ? { fontSize: '68%' } : {})
+  }
+}
+
+const getWatermarkRenderStyle = (schema, isCard = false) => {
+  const layout = normalizeLayout(schema?.layout)
+  const scale = isCard ? 0.68 : 1
+  return {
+    ...getWatermarkPlacementStyle(schema, isCard),
+    ...getWatermarkSurfaceStyle(schema, isCard),
+    padding: `${Math.round(layout.surface.padding * scale)}px`,
+    borderRadius: `${Math.round(layout.surface.radius * scale)}px`
   }
 }
 </script>

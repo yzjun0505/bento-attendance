@@ -8,7 +8,7 @@ import '../../repositories/track_repository.dart';
 
 /// 高德地图 Web JS API Key
 /// 请在运行时通过 --dart-define=AMAP_WEB_KEY=your_key 传入
-const _kAmapWebKey = String.fromEnvironment('AMAP_WEB_KEY', defaultValue: 'your_amap_web_key_here');
+const _kAmapWebKey = String.fromEnvironment('AMAP_WEB_KEY', defaultValue: '801b526de6c904197d85471544b61d75');
 
 class TrackScreen extends StatefulWidget {
   final int? userId;

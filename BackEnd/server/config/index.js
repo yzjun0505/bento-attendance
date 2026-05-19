@@ -48,6 +48,14 @@ module.exports = {
   // 高德地图 API Key
   amapKey: process.env.AMAP_KEY || '',
 
+  // AI 助手配置：兼容 OpenAI 风格 /chat/completions 接口
+  ai: {
+    apiKey: process.env.AI_API_KEY || '',
+    baseUrl: process.env.AI_BASE_URL || 'https://api.openai.com/v1',
+    model: process.env.AI_MODEL || '',
+    timeout: Number(process.env.AI_TIMEOUT_MS || 30000),
+  },
+
   // 上传文件配置
   upload: {
     maxSize: 5 * 1024 * 1024, // 5MB

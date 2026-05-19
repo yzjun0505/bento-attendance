@@ -11,7 +11,7 @@ class AmapGeoService {
   /// 高德 Web 服务 Key（REST API 必须使用「Web服务」类型的 Key）
   /// 注意：Android/iOS SDK Key 不能用于 REST API（会返回 USERKEY_PLAT_NOMATCH）
   /// 请在运行时通过 --dart-define=AMAP_KEY=your_key 传入
-  static const String _apiKey = String.fromEnvironment('AMAP_KEY', defaultValue: 'your_amap_key_here');
+  static const String _apiKey = String.fromEnvironment('AMAP_KEY', defaultValue: 'ae275848401da60cbf76669fdc22b450');
 
   static final Dio _dio = Dio(BaseOptions(
     connectTimeout: const Duration(seconds: 10),

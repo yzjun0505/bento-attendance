@@ -73,8 +73,10 @@
             <el-option label="已驳回" value="rejected" />
           </el-select>
           <el-select v-model="approvalFilters.type" placeholder="审批类型" clearable style="width: 130px" @change="loadApprovals">
-            <el-option label="请假" value="leave" />
-            <el-option label="加班" value="overtime" />
+            <el-option label="补卡" value="补卡" />
+            <el-option label="请假" value="请假" />
+            <el-option label="加班" value="加班" />
+            <el-option label="异常打卡" value="异常打卡" />
           </el-select>
           <el-button type="primary" :icon="Search" @click="loadApprovals">搜索</el-button>
         </div>
@@ -84,8 +86,8 @@
             <el-table-column prop="user_name" label="申请人" width="100" />
             <el-table-column prop="type" label="类型" width="100">
               <template #default="{ row }">
-                <el-tag :type="row.type === 'leave' ? 'warning' : row.type === 'overtime' ? 'danger' : 'info'" size="small" effect="dark" round>
-                  {{ row.type === 'leave' ? '请假' : row.type === 'overtime' ? '加班' : row.type }}
+                <el-tag :type="getApprovalTypeTag(row.type)" size="small" effect="dark" round>
+                  {{ row.type }}
                 </el-tag>
               </template>
             </el-table-column>
@@ -190,6 +192,7 @@ import { Promotion, Search } from '@element-plus/icons-vue'
 
 const typeNameMap = { system: '系统通知', checkin: '打卡通知', project: '项目通知', alert: '告警通知' }
 const typeTagMap = { system: '', checkin: 'success', project: 'warning', alert: 'danger' }
+const approvalTypeTagMap = { 补卡: 'info', 请假: 'warning', 加班: 'danger', 异常打卡: 'danger' }
 
 const activeTab = ref('notifications')
 const loading = ref(false)
@@ -219,6 +222,10 @@ const approvalSubmitting = ref(false)
 const approvalAction = ref('approve')
 const approvalRemark = ref('')
 const currentApproval = ref(null)
+
+function getApprovalTypeTag(type) {
+  return approvalTypeTagMap[type] || 'info'
+}
 
 onMounted(() => {
   loadNotifications()

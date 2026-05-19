@@ -1,0 +1,84 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: bento_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      TZ: Asia/Shanghai
+    command: --default-authentication-plugin=mysql_native_password
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DB_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bento_app
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    expose:
+      - "3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      ADMIN_USERNAME: ${ADMIN_USERNAME}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      APP_ANDROID_VERSION_NAME: ${APP_ANDROID_VERSION_NAME:-1.0.0}
+      APP_ANDROID_VERSION_CODE: ${APP_ANDROID_VERSION_CODE:-1}
+      APP_ANDROID_MIN_VERSION_CODE: ${APP_ANDROID_MIN_VERSION_CODE:-1}
+      APP_ANDROID_FORCE_UPDATE: ${APP_ANDROID_FORCE_UPDATE:-false}
+      APP_ANDROID_DOWNLOAD_URL: ${APP_ANDROID_DOWNLOAD_URL:-}
+      APP_ANDROID_RELEASE_NOTES: ${APP_ANDROID_RELEASE_NOTES:-}
+      APP_IOS_VERSION_NAME: ${APP_IOS_VERSION_NAME:-1.0.0}
+      APP_IOS_VERSION_CODE: ${APP_IOS_VERSION_CODE:-1}
+      APP_IOS_MIN_VERSION_CODE: ${APP_IOS_MIN_VERSION_CODE:-1}
+      APP_IOS_FORCE_UPDATE: ${APP_IOS_FORCE_UPDATE:-false}
+      APP_IOS_DOWNLOAD_URL: ${APP_IOS_DOWNLOAD_URL:-}
+      APP_IOS_RELEASE_NOTES: ${APP_IOS_RELEASE_NOTES:-}
+      MONGODB_REQUIRED: "false"
+      OPENIM_MOCK_MODE: ${OPENIM_MOCK_MODE:-true}
+      OPENIM_API_URL: ${OPENIM_API_URL:-http://host.docker.internal:10002}
+      OPENIM_WS_URL: ${OPENIM_WS_URL:-ws://host.docker.internal:10001}
+      OPENIM_EXTERNAL_API_URL: ${OPENIM_EXTERNAL_API_URL:-}
+      OPENIM_EXTERNAL_WS_URL: ${OPENIM_EXTERNAL_WS_URL:-}
+      OPENIM_PUBLIC_HOST: ${OPENIM_PUBLIC_HOST:-}
+      OPENIM_SECRET: ${OPENIM_SECRET:-openIM123}
+      OPENIM_ADMIN_USERID: ${OPENIM_ADMIN_USERID:-imAdmin}
+      TZ: Asia/Shanghai
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./uploads:/app/server/uploads
+      - logs:/app/server/logs
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: bento_nginx
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./uploads:/usr/share/nginx/html/uploads:ro
+
+volumes:
+  mysql_data:
+  logs:

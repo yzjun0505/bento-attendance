@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart';
 import 'package:gal/gal.dart';
 import '../models/watermark_template.dart';
+import 'watermark_renderer.dart';
 
 class WatermarkService {
   static final ImagePicker _picker = ImagePicker();
@@ -185,13 +186,6 @@ class WatermarkService {
     final canvas = Canvas(recorder);
     canvas.drawImage(originalImage, Offset.zero, Paint());
 
-    final baseScale = imgWidth / 1080.0;
-    final effectiveScale = baseScale * scale;
-    double destX = imgWidth * normalizedOffset.dx;
-    double destY = imgHeight * normalizedOffset.dy;
-    if (destX < 0) destX = 20 * baseScale;
-    if (destY < 0) destY = 20 * baseScale;
-
     final timeStr = DateFormat('yyyy-MM-dd HH:mm:ss').format(timestamp);
     final dateStr = DateFormat('yyyy-MM-dd').format(timestamp);
     final timeOnlyStr = DateFormat('HH:mm:ss').format(timestamp);
@@ -237,41 +231,15 @@ class WatermarkService {
     }
 
     final tmpl = template ?? _defaultTemplate();
-    final style = tmpl.defaultStyle;
-    final skeletonPreset = tmpl.skeletonPreset;
-
-    if (style == WatermarkStyle.fullScreenWatermark) {
-      _drawFullScreenWatermark(
-          canvas, imgWidth, imgHeight, effectiveScale, data, tmpl, skeletonPreset);
-    } else {
-      canvas.save();
-      if (rotationTurns != 0) {
-        final cardW = (style == WatermarkStyle.bottomBar)
-            ? imgWidth
-            : 500 * effectiveScale;
-        final lines = _getDisplayLines(tmpl, data);
-        final cardH = (style == WatermarkStyle.qrCode)
-            ? (120 * effectiveScale + 32 * effectiveScale)
-            : (lines * (tmpl.fontSize * effectiveScale * 1.6) +
-                32 * effectiveScale);
-
-        final cx = destX + cardW / 2;
-        final cy = destY + cardH / 2;
-        canvas.translate(cx, cy);
-        canvas.rotate(rotationTurns * (3.1415926535897932 / 2));
-        canvas.translate(-cx, -cy);
-      }
-
-      if (style == WatermarkStyle.qrCode) {
-        _drawQrCodeWatermark(canvas, imgWidth, imgHeight, effectiveScale, destX,
-            destY, data, tmpl, skeletonPreset);
-      } else {
-        _drawStyledWatermark(canvas, imgWidth, imgHeight, effectiveScale,
-            baseScale, destX, destY, data, tmpl, style, skeletonPreset);
-      }
-
-      canvas.restore();
-    }
+    WatermarkRenderer.paint(
+      canvas: canvas,
+      size: Size(imgWidth, imgHeight),
+      template: tmpl,
+      data: data,
+      normalizedOffset: normalizedOffset,
+      scale: scale,
+      rotationTurns: rotationTurns,
+    );
 
     final picture = recorder.endRecording();
     final newImage = await picture.toImage(imgWidth.toInt(), imgHeight.toInt());
@@ -292,7 +260,7 @@ class WatermarkService {
     return outputFile;
   }
 
-  static int _getDisplayLines(WatermarkTemplate tmpl, Map<String, String> data) {
+  static int legacyGetDisplayLines(WatermarkTemplate tmpl, Map<String, String> data) {
     int lines = 0;
     if (tmpl.titleSlot != null && _getSlotValue(tmpl.titleSlot!, data).isNotEmpty) {
       lines++;
@@ -325,7 +293,7 @@ class WatermarkService {
         ],
       );
 
-  static void _drawWrappedText(Canvas canvas, String text, TextStyle style,
+  static void legacyDrawWrappedText(Canvas canvas, String text, TextStyle style,
       Offset offset, double maxWidth,
       {int maxLines = 0}) {
     if (text.isEmpty) return;
@@ -337,7 +305,7 @@ class WatermarkService {
     tp.paint(canvas, offset);
   }
 
-  static void _drawStyledWatermark(
+  static void legacyDrawStyledWatermark(
     Canvas canvas,
     double imgWidth,
     double imgHeight,
@@ -351,7 +319,7 @@ class WatermarkService {
     String skeletonPreset,
   ) {
     final displayLines = <String>[];
-    final lineStyles = <_LineStyle>[];
+    final lineStyles = <LegacyLineStyle>[];
 
     if (tmpl.titleSlot != null) {
       final ft = tmpl.titleSlot!.fieldType;
@@ -360,7 +328,7 @@ class WatermarkService {
         final value = _getSlotValue(tmpl.titleSlot!, data);
         if (value.isNotEmpty) {
           displayLines.add(value);
-          lineStyles.add(_LineStyle(isTitle: true));
+          lineStyles.add(LegacyLineStyle(isTitle: true));
         }
       }
     }
@@ -372,7 +340,7 @@ class WatermarkService {
         final value = _getSlotValue(tmpl.subtitleSlot!, data);
         if (value.isNotEmpty) {
           displayLines.add(value);
-          lineStyles.add(_LineStyle(isSubtitle: true));
+          lineStyles.add(LegacyLineStyle(isSubtitle: true));
         }
       }
     }
@@ -384,7 +352,7 @@ class WatermarkService {
       final text = _getSlotDisplayText(slot, data);
       if (text.isNotEmpty) {
         displayLines.add(text);
-        lineStyles.add(_LineStyle());
+        lineStyles.add(LegacyLineStyle());
       }
     }
 
@@ -394,7 +362,7 @@ class WatermarkService {
         final val = _getFieldValue(f, data);
         if (val.isNotEmpty) {
           displayLines.add(val);
-          lineStyles.add(_LineStyle());
+          lineStyles.add(LegacyLineStyle());
         }
       }
     }
@@ -475,7 +443,7 @@ class WatermarkService {
       final fontSize = ls.isTitle ? baseFontSize * 1.3 : baseFontSize;
       final fontWeight = ls.isTitle ? FontWeight.bold : FontWeight.w500;
 
-      _drawWrappedText(
+      legacyDrawWrappedText(
         canvas,
         text,
         TextStyle(
@@ -505,7 +473,7 @@ class WatermarkService {
     return Radius.circular(8 * scale);
   }
 
-  static void _drawFullScreenWatermark(
+  static void legacyDrawFullScreenWatermark(
     Canvas canvas,
     double imgWidth,
     double imgHeight,
@@ -617,7 +585,7 @@ class WatermarkService {
 
       double curY = y + 16 * scale;
       for (final val in displayLines) {
-        _drawWrappedText(
+        legacyDrawWrappedText(
           canvas,
           val,
           TextStyle(
@@ -638,7 +606,7 @@ class WatermarkService {
     }
   }
 
-  static void _drawQrCodeWatermark(
+  static void legacyDrawQrCodeWatermark(
     Canvas canvas,
     double imgWidth,
     double imgHeight,
@@ -744,7 +712,7 @@ class WatermarkService {
     final textMaxW = cardW - (qrSize + 28 * scale);
 
     for (final val in displayLines) {
-      _drawWrappedText(
+      legacyDrawWrappedText(
         canvas,
         val,
         TextStyle(color: Colors.white, fontSize: fontSize),
@@ -757,9 +725,9 @@ class WatermarkService {
   }
 }
 
-class _LineStyle {
+class LegacyLineStyle {
   final bool isTitle;
   final bool isSubtitle;
 
-  _LineStyle({this.isTitle = false, this.isSubtitle = false});
+  LegacyLineStyle({this.isTitle = false, this.isSubtitle = false});
 }

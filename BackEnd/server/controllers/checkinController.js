@@ -5,25 +5,8 @@ const crypto = require('crypto');
 const ExcelJS = require('exceljs');
 const { getPool } = require('../models/db');
 const { successResponse, errorResponse, parsePagination, getTodayRange } = require('../utils/helpers');
-
-/**
- * 打卡类型名称映射（兼容旧数据 in/out → 新命名）
- */
-const TYPE_NAME_MAP = {
-  'in': '上班打卡',
-  'out': '下班打卡',
-  'clock_in': '上班打卡',
-  'clock_out': '下班打卡',
-  'site_visit': '实地考察',
-  'progress': '项目进度上报',
-  'safety': '安全检查',
-  'device': '设备位置上报',
-  'custom': '自定义',
-};
-
-function getTypeName(type) {
-  return TYPE_NAME_MAP[type] || type;
-}
+const checkinService = require('../services/checkinService');
+const { getTypeName } = checkinService;
 
 /**
  * 生成16位防伪码（大写字母+数字）
@@ -38,141 +21,19 @@ function generateWatermarkCode() {
  */
 async function submitCheckin(req, res) {
   try {
-    const { type, latitude, longitude, address, photo, remark, project_id } = req.body;
-    if (!type) {
-      return res.status(400).json(errorResponse('打卡类型不能为空', 400));
-    }
-
-    // 验证打卡类型是否合法（兼容旧类型 in/out 和新类型）
-    const validTypes = ['in', 'out', 'clock_in', 'clock_out', 'site_visit', 'progress', 'safety', 'device', 'custom'];
     const db = getPool();
+    const result = await checkinService.createCheckin(db, {
+      userId: req.user.id,
+      data: req.body,
+      source: 'online',
+    });
 
-    // 也从 checkin_types 表获取自定义类型
-    const [customTypes] = await db.execute('SELECT code FROM checkin_types WHERE status = 1');
-    const allValidTypes = new Set([...validTypes, ...customTypes.map(t => t.code)]);
-
-    if (!allValidTypes.has(type)) {
-      return res.status(400).json(errorResponse('不合法的打卡类型', 400));
-    }
-
-    const userId = req.user.id;
-
-    // 检查是否在围栏范围内
-    let isOutside = 0;
-    let distanceToFence = null;
-    if (project_id && latitude && longitude) {
-      const [projects] = await db.execute(
-        'SELECT latitude, longitude, radius FROM projects WHERE id = ?',
-        [project_id]
-      );
-      if (projects.length > 0) {
-        const project = projects[0];
-        if (project.latitude && project.longitude) {
-          const distance = calculateDistance(
-            latitude, longitude,
-            project.latitude, project.longitude
-          );
-          distanceToFence = Math.round(distance); // 存储数值
-          // 默认围栏半径缩小为更灵敏的 200米
-          isOutside = distance > (project.radius || 500) ? 1 : 0;
-        }
-      }
-    }
-
-    // 验证防伪码是否在本系统合法且未使用（仅在提供了防伪码时验证）
-// ... lines 80-104 (truncated in replacement content for brevity if I could, but I need to match)
-    const watermarkCode = req.body.watermark_code;
-    if (watermarkCode) {
-      const [codes] = await db.execute(
-        'SELECT * FROM watermark_codes WHERE code = ? AND user_id = ? FOR UPDATE',
-        [watermarkCode, userId]
-      );
-
-      if (codes.length === 0) {
-        return res.status(400).json(errorResponse('非法的防伪码，请使用本系统拍摄', 400));
-      }
-
-      const codeRecord = codes[0];
-      if (codeRecord.status === 'used') {
-        return res.status(400).json(errorResponse('该照片已上传过打卡，不可重复使用', 400));
-      }
-
-      if (codeRecord.status === 'expired' || new Date(codeRecord.expires_at) < new Date()) {
-        await db.execute('UPDATE watermark_codes SET status = ? WHERE id = ?', ['expired', codeRecord.id]);
-        return res.status(400).json(errorResponse('此照片拍摄已超过30天有效期，防伪码已作废', 400));
-      }
-      // 更新防伪码状态为已使用
-      await db.execute('UPDATE watermark_codes SET status = ? WHERE id = ?', ['used', codeRecord.id]);
-    }
-
-    // 写入打卡记录
-    const [result] = await db.execute(
-      'INSERT INTO checkins (user_id, project_id, type, latitude, longitude, address, photo, remark, is_outside, distance_to_fence, watermark_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [userId, project_id || null, type, latitude || null, longitude || null, address || '', photo || '', remark || '', isOutside, distanceToFence, watermarkCode || null]
-    );
-
-    // 判断打卡状态（迟到/早退/正常）
-    let checkinStatus = 'normal';
-    let statusMessage = '打卡成功';
-    
-    if (type === 'clock_in' || type === 'in') {
-      // 上班打卡：检查是否迟到
-      const [groups] = await db.execute(`
-        SELECT ag.work_start_time, ag.late_tolerance
-        FROM attendance_groups ag
-        JOIN attendance_group_members agm ON ag.id = agm.group_id
-        WHERE agm.user_id = ? AND ag.status = 1
-        LIMIT 1
-      `, [userId]);
-      
-      if (groups.length > 0) {
-        const group = groups[0];
-        const now = new Date();
-        const [startHour, startMin] = group.work_start_time.split(':').map(Number);
-        const startMinutes = startHour * 60 + startMin;
-        const nowMinutes = now.getHours() * 60 + now.getMinutes();
-        
-        if (nowMinutes > startMinutes + (group.late_tolerance || 0)) {
-          checkinStatus = 'late';
-          statusMessage = '打卡成功（迟到）';
-        }
-      }
-    } else if (type === 'clock_out' || type === 'out') {
-      // 下班打卡：检查是否早退
-      const [groups] = await db.execute(`
-        SELECT ag.work_end_time, ag.early_leave_tolerance
-        FROM attendance_groups ag
-        JOIN attendance_group_members agm ON ag.id = agm.group_id
-        WHERE agm.user_id = ? AND ag.status = 1
-        LIMIT 1
-      `, [userId]);
-      
-      if (groups.length > 0) {
-        const group = groups[0];
-        const now = new Date();
-        const [endHour, endMin] = group.work_end_time.split(':').map(Number);
-        const endMinutes = endHour * 60 + endMin;
-        const nowMinutes = now.getHours() * 60 + now.getMinutes();
-        
-        if (nowMinutes < endMinutes - (group.early_leave_tolerance || 0)) {
-          checkinStatus = 'early_leave';
-          statusMessage = '打卡成功（早退）';
-        }
-      }
-    }
-
-    // 围栏外打卡需要审批
-    if (isOutside === 1) {
-      statusMessage = '打卡成功（围栏外，需审批）';
-    }
-
-    res.json(successResponse({
-      id: result.insertId,
-      is_outside: isOutside,
-      watermark_code: watermarkCode,
-      checkin_status: checkinStatus
-    }, statusMessage));
+    const { message, ...data } = result;
+    res.json(successResponse(data, message));
   } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json(errorResponse(err.message, err.status));
+    }
     console.error('打卡失败:', err);
     res.status(500).json(errorResponse('服务器错误'));
   }
@@ -395,20 +256,6 @@ async function reserveCode(req, res) {
     console.error('生成预占防伪码失败:', err);
     res.status(500).json(errorResponse('服务器错误'));
   }
-}
-
-/**
- * 计算两点间距离（Haversine公式，单位米）
- */
-function calculateDistance(lat1, lng1, lat2, lng2) {
-  const R = 6371000;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLng / 2) ** 2;
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
 }
 
 /**

@@ -37,6 +37,8 @@ const trackRoutes = require('./routes/tracks');
 const approvalRoutes = require('./routes/approvals');
 const sessionsRoutes = require('./routes/sessions');
 const imRoutes = require('./routes/im');
+const aiRoutes = require('./routes/ai');
+const appVersionRoutes = require('./routes/appVersion');
 
 const app = express();
 const server = http.createServer(app);
@@ -105,6 +107,8 @@ app.use('/api/tracks', trackRoutes);
 app.use('/api/approvals', approvalRoutes);
 app.use('/api/sessions', sessionsRoutes);
 app.use('/api/im', imRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/app', appVersionRoutes);
 
 // 健康检查
 app.get('/api/health', async (req, res) => {

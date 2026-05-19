@@ -147,6 +147,8 @@ async function initDatabase() {
       remark VARCHAR(500) DEFAULT '',
       is_outside TINYINT DEFAULT 0 COMMENT '1围栏外打卡 0正常',
       distance_to_fence DOUBLE DEFAULT NULL COMMENT '距离围栏距离(米)',
+      outside_approval_status ENUM('none', 'pending', 'approved', 'rejected') NOT NULL DEFAULT 'none' COMMENT '围栏外打卡审批状态',
+      approval_request_id INT DEFAULT NULL COMMENT '关联审批单ID',
       watermark_code VARCHAR(20) DEFAULT NULL COMMENT '水印防伪码',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -165,6 +167,28 @@ async function initDatabase() {
     logger.info('已迁移 checkins 表：添加 distance_to_fence 字段');
   } catch (e) {
     // 字段已存在则忽略
+  }
+
+  // 迁移：为已有的 checkins 表添加围栏外审批闭环字段
+  const checkinApprovalMigrations = [
+    {
+      col: 'outside_approval_status',
+      sql: "ALTER TABLE checkins ADD COLUMN outside_approval_status ENUM('none', 'pending', 'approved', 'rejected') NOT NULL DEFAULT 'none' COMMENT '围栏外打卡审批状态'"
+    },
+    {
+      col: 'approval_request_id',
+      sql: "ALTER TABLE checkins ADD COLUMN approval_request_id INT DEFAULT NULL COMMENT '关联审批单ID'"
+    },
+  ];
+  for (const m of checkinApprovalMigrations) {
+    try {
+      await db.execute(m.sql);
+      logger.info(`已迁移 checkins 表：添加 ${m.col} 字段`);
+    } catch (e) {
+      if (e.code !== 'ER_DUP_FIELDNAME') {
+        logger.error(`迁移 checkins 表 ${m.col} 字段失败`, { error: e.message });
+      }
+    }
   }
 
   // 迁移：为已有的 checkins 表添加 watermark_code 字段
@@ -405,6 +429,7 @@ async function initDatabase() {
       checkout_time TIME DEFAULT NULL COMMENT '下班打卡时间',
       shift_id INT DEFAULT NULL COMMENT '班次ID',
       group_id INT DEFAULT NULL COMMENT '考勤组ID',
+      overtime TINYINT NOT NULL DEFAULT 0 COMMENT '是否加班',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -415,6 +440,18 @@ async function initDatabase() {
       INDEX idx_status (status)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
+
+  // 迁移：为已有的 attendance_results 表添加 overtime 字段
+  try {
+    await db.execute(`
+      ALTER TABLE attendance_results ADD COLUMN overtime TINYINT NOT NULL DEFAULT 0 COMMENT '是否加班'
+    `);
+    logger.info('已迁移 attendance_results 表：添加 overtime 字段');
+  } catch (e) {
+    if (e.code !== 'ER_DUP_FIELDNAME') {
+      logger.error('迁移 attendance_results 表 overtime 字段失败', { error: e.message });
+    }
+  }
 
   // 创建节假日表
   await db.execute(`
@@ -434,8 +471,9 @@ async function initDatabase() {
   await db.execute(`
     CREATE TABLE IF NOT EXISTS approval_requests (
       id INT AUTO_INCREMENT PRIMARY KEY,
-      type ENUM('补卡', '请假', '加班') NOT NULL COMMENT '申请类型',
+      type ENUM('补卡', '请假', '加班', '异常打卡') NOT NULL COMMENT '申请类型',
       user_id INT NOT NULL COMMENT '申请人ID',
+      checkin_id INT DEFAULT NULL COMMENT '关联打卡记录ID',
       reason TEXT NOT NULL COMMENT '申请原因',
       start_date DATE NOT NULL COMMENT '开始日期',
       end_date DATE NOT NULL COMMENT '结束日期',
@@ -448,10 +486,41 @@ async function initDatabase() {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (approver_id) REFERENCES users(id) ON DELETE SET NULL,
       INDEX idx_user_status (user_id, status),
+      INDEX idx_checkin_id (checkin_id),
       INDEX idx_status (status),
       INDEX idx_created (created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
+
+  // 迁移：扩展审批类型并关联异常打卡记录
+  try {
+    await db.execute(`
+      ALTER TABLE approval_requests MODIFY COLUMN type ENUM('补卡', '请假', '加班', '异常打卡') NOT NULL COMMENT '申请类型'
+    `);
+    logger.info('已迁移 approval_requests 表：支持异常打卡审批类型');
+  } catch (e) {
+    logger.error('迁移 approval_requests 表 type 字段失败', { error: e.message });
+  }
+
+  try {
+    await db.execute(`
+      ALTER TABLE approval_requests ADD COLUMN checkin_id INT DEFAULT NULL COMMENT '关联打卡记录ID' AFTER user_id
+    `);
+    logger.info('已迁移 approval_requests 表：添加 checkin_id 字段');
+  } catch (e) {
+    if (e.code !== 'ER_DUP_FIELDNAME') {
+      logger.error('迁移 approval_requests 表 checkin_id 字段失败', { error: e.message });
+    }
+  }
+
+  try {
+    await db.execute(`ALTER TABLE approval_requests ADD INDEX idx_checkin_id (checkin_id)`);
+    logger.info('已迁移 approval_requests 表：添加 checkin_id 索引');
+  } catch (e) {
+    if (e.code !== 'ER_DUP_KEYNAME') {
+      logger.error('迁移 approval_requests 表 checkin_id 索引失败', { error: e.message });
+    }
+  }
 
   // 创建打卡类型表
   await db.execute(`
@@ -546,6 +615,71 @@ async function initDatabase() {
       logger.error('迁移 sessions 表 idx_user_platform 索引失败', { error: e.message });
     }
   }
+
+  // AI 会话表
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS ai_conversations (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL COMMENT '发起用户ID',
+      title VARCHAR(120) NOT NULL DEFAULT '新对话',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      deleted_at DATETIME DEFAULT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      INDEX idx_user_updated (user_id, updated_at),
+      INDEX idx_deleted (deleted_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS ai_messages (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      conversation_id INT NOT NULL,
+      user_id INT NOT NULL,
+      role ENUM('user', 'assistant', 'tool') NOT NULL,
+      content TEXT NOT NULL,
+      metadata JSON DEFAULT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (conversation_id) REFERENCES ai_conversations(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      INDEX idx_conversation_created (conversation_id, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS ai_action_requests (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      conversation_id INT NOT NULL,
+      user_id INT NOT NULL,
+      action_type VARCHAR(80) NOT NULL,
+      title VARCHAR(160) NOT NULL,
+      payload JSON NOT NULL,
+      status ENUM('pending', 'confirmed', 'rejected', 'expired', 'failed') NOT NULL DEFAULT 'pending',
+      result JSON DEFAULT NULL,
+      confirmed_at DATETIME DEFAULT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (conversation_id) REFERENCES ai_conversations(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      INDEX idx_user_status (user_id, status),
+      INDEX idx_action_type (action_type)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS ai_audit_logs (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      action_type VARCHAR(80) NOT NULL,
+      payload JSON DEFAULT NULL,
+      result JSON DEFAULT NULL,
+      ip_address VARCHAR(45) DEFAULT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      INDEX idx_user_created (user_id, created_at),
+      INDEX idx_action_type (action_type)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
 
   // 初始水印模板
   const [wmRows] = await db.execute('SELECT count(*) as count FROM watermark_templates');

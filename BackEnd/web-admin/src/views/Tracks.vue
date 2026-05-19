@@ -177,7 +177,8 @@ function initMap() {
     } else {
       // 动态加载高德地图 JS API
       const script = document.createElement('script')
-      script.src = 'https://webapi.amap.com/maps?v=2.0&key=your_amap_web_key_here'
+      const amapKey = import.meta.env.VITE_AMAP_WEB_KEY
+      script.src = `https://webapi.amap.com/maps?v=2.0&key=${amapKey}`
       script.onload = () => createMap()
       document.head.appendChild(script)
     }

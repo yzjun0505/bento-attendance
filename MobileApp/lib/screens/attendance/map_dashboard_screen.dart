@@ -13,7 +13,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 /// 高德地图 Web JS API Key
 /// 请在运行时通过 --dart-define=AMAP_WEB_KEY=your_key 传入
 const _kAmapWebKey = String.fromEnvironment('AMAP_WEB_KEY',
-    defaultValue: 'your_amap_web_key_here');
+    defaultValue: '801b526de6c904197d85471544b61d75');
 
 /// 地图看板 — Tab 1
 /// 集成高德地图 + 围栏 + 打卡功能 + 多打卡类型 + 项目自动绑定

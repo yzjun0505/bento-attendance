@@ -8,6 +8,9 @@ import '../blocs/home/home_bloc_base.dart';
 import '../blocs/tracking/tracking_bloc.dart';
 import '../blocs/tracking/tracking_event.dart';
 import '../core/bento_colors.dart';
+import '../repositories/app_update_repository.dart';
+import '../api/dio_client.dart';
+import '../widgets/app_update_dialog.dart';
 import '../widgets/offline_banner.dart';
 import 'home/home_screen.dart';
 import 'attendance/map_dashboard_screen.dart';
@@ -23,6 +26,9 @@ class MainNavigation extends StatefulWidget {
 
 class MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0; // 默认看板页
+  final AppUpdateRepository _updateRepository =
+      AppUpdateRepository(apiClient: ApiClient());
+  bool _checkedUpdate = false;
 
   void switchToTab(int index) {
     setState(() => _currentIndex = index);
@@ -34,21 +40,19 @@ class MainNavigationState extends State<MainNavigation> {
     // 开启实时定位上报
     context.read<TrackingBloc>().add(StartTracking());
     // 加载初始数据
-    context.read<HomeBloc>().add(LoadHomeSummary());
+    context.read<HomeBloc>().add(const LoadHomeSummary());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _autoCheckForUpdate());
   }
 
-  Widget _buildCurrentScreen(int index) {
-    switch (index) {
-      case 0:
-        return const HomeScreen();
-      case 1:
-        return const MapDashboardScreen();
-      case 2:
-        return const HistoryScreen();
-      case 3:
-        return const ProfileScreen();
-      default:
-        return const HomeScreen();
+  Future<void> _autoCheckForUpdate() async {
+    if (_checkedUpdate || !mounted) return;
+    _checkedUpdate = true;
+    try {
+      final update = await _updateRepository.checkLatest();
+      if (!mounted || !update.hasUpdate) return;
+      await AppUpdateDialog.show(context, update);
+    } catch (_) {
+      // 自动检查失败不打扰用户，设置页仍可手动检查。
     }
   }
 

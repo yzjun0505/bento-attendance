@@ -132,6 +132,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
+  bool _isStaleIMToken(String? token) {
+    return token == null || token.isEmpty || token.startsWith('mock_im_token_');
+  }
+
+  Future<void> _clearIMStorage() async {
+    await _storage.delete(key: 'im_token');
+    await _storage.delete(key: 'im_api_addr');
+    await _storage.delete(key: 'im_ws_addr');
+  }
+
   Future<void> _asyncValidateProfile(String token) async {
     try {
       final response = await apiClient.dio.get('/auth/profile').timeout(const Duration(seconds: 5));
@@ -187,24 +197,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     final results = await Future.wait([
       _storage.read(key: 'jwt_token'),
       _storage.read(key: 'user_profile_json'),
-      _storage.read(key: 'im_token'),
-      _storage.read(key: 'im_api_addr'),
-      _storage.read(key: 'im_ws_addr'),
     ]);
 
     final token = results[0];
     final cachedUserJson = results[1];
-    final imToken = results[2];
-    String? imApiAddr = results[3];
-    String? imWsAddr = results[4];
-
-    // 强制校验缓存的 IM 地址是否与当前环境匹配，如果不匹配（比如从模拟器切换到了真机）则丢弃缓存使用默认
-    if (imApiAddr != null && !imApiAddr.contains(ApiClient.serverIp)) {
-      imApiAddr = null;
-      imWsAddr = null;
-    }
-
-    debugPrint('=== AppStarted: jwt=${token != null}, imToken=${imToken != null}, imApiAddr=$imApiAddr, imWsAddr=$imWsAddr ===');
+    debugPrint('=== AppStarted: jwt=${token != null}，启动后将刷新 OpenIM Token ===');
     if (token == null || token.isEmpty) {
       emit(const AuthUnauthenticated());
       return;
@@ -221,15 +218,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(AuthAuthenticated(
       user: cachedUser,
       token: token,
-      imToken: imToken,
+      imToken: null,
       imInitialized: false,
-      imConnecting: false,
+      imConnecting: true,
       isOffline: false,
     ));
 
     _getuiService.setAlias(cachedUser.id.toString());
     _asyncValidateProfile(token);
-    _asyncIMLogin(cachedUser.id.toString(), imToken, apiAddr: imApiAddr, wsAddr: imWsAddr);
+    await _clearIMStorage();
+    _refreshAndLoginIM(cachedUser, null);
   }
 
   Future<void> _onConnectivityChanged(ConnectivityChanged event, Emitter<AuthState> emit) async {
@@ -262,7 +260,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       debugPrint('刷新用户信息未知错误: $e');
     }
 
-    if (currentState.imToken != null && !_imService.isLoggedIn) {
+    if (_isStaleIMToken(currentState.imToken)) {
+      await _clearIMStorage();
+      _compensateIMToken(currentState.user, currentState.token, null);
+    } else if (currentState.imToken != null && !_imService.isLoggedIn) {
       final imApiAddr = await _storage.read(key: 'im_api_addr');
       final imWsAddr = await _storage.read(key: 'im_ws_addr');
       _asyncIMLogin(currentState.user.id.toString(), currentState.imToken, apiAddr: imApiAddr, wsAddr: imWsAddr);
@@ -409,15 +410,29 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         imConnecting: false,
         imToken: event.imToken,
       ));
+      if (!event.success) {
+        debugPrint('=== OpenIM 登录失败，清理 IM Token 并尝试重新获取 ===');
+        await _clearIMStorage();
+        _compensateIMToken(currentState.user, currentState.token, null);
+      }
     }
   }
 
   /// 补偿获取 IM Token
   Future<void> _compensateIMToken(User user, String token, Map<String, dynamic>? imConfig) async {
+    await _refreshAndLoginIM(user, imConfig, delay: const Duration(seconds: 2));
+  }
+
+  Future<void> _refreshAndLoginIM(
+    User user,
+    Map<String, dynamic>? imConfig, {
+    Duration delay = Duration.zero,
+  }) async {
     try {
       debugPrint('=== 开始补偿获取 IM Token ===');
-      // 等待 2 秒给后端异步处理点时间
-      await Future.delayed(const Duration(seconds: 2));
+      if (delay > Duration.zero) {
+        await Future.delayed(delay);
+      }
       
       final response = await apiClient.dio.get('/auth/im-token');
       if (response.statusCode == 200) {

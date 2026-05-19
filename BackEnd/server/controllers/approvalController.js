@@ -4,8 +4,10 @@
 const { getPool } = require('../models/db');
 const { successResponse, errorResponse, parsePagination } = require('../utils/helpers');
 const logger = require('../utils/logger');
+const notificationService = require('../services/notificationService');
 
-const APPROVAL_TYPES = ['补卡', '请假', '加班'];
+const OUTSIDE_CHECKIN_APPROVAL_TYPE = '异常打卡';
+const APPROVAL_TYPES = ['补卡', '请假', '加班', OUTSIDE_CHECKIN_APPROVAL_TYPE];
 const APPROVAL_STATUS = ['pending', 'approved', 'rejected'];
 
 async function createApproval(req, res) {
@@ -20,12 +22,24 @@ async function createApproval(req, res) {
     if (!APPROVAL_TYPES.includes(type)) {
       return res.status(400).json(errorResponse('申请类型无效', 400));
     }
+    if (type === OUTSIDE_CHECKIN_APPROVAL_TYPE) {
+      return res.status(400).json(errorResponse('异常打卡审批由系统自动生成', 400));
+    }
 
     const db = getPool();
     const [result] = await db.execute(
       'INSERT INTO approval_requests (user_id, type, reason, start_date, end_date) VALUES (?, ?, ?, ?, ?)',
       [user_id, type, reason, start_date, end_date || start_date]
     );
+
+    notifyManagersForApprovalRequest(db, {
+      approvalId: result.insertId,
+      userId: user_id,
+      type,
+      reason,
+      startDate: start_date,
+      endDate: end_date || start_date,
+    });
 
     res.json(successResponse({ id: result.insertId }, '申请提交成功'));
   } catch (err) {
@@ -183,8 +197,11 @@ async function approveApproval(req, res) {
         // 加班不影响正常考勤状态，但记录加班标记
         await upsertAttendanceResult(db, approval.user_id, dateStr, null, { overtime: true });
       }
+    } else if (approval.type === OUTSIDE_CHECKIN_APPROVAL_TYPE) {
+      await updateOutsideCheckinApproval(db, approval, 'approved');
     }
 
+    await notifyApprovalResult(approval, 'approved', remark);
     res.json(successResponse(null, '审批通过'));
   } catch (err) {
     logger.error('审批通过失败', { error: err.message, approvalId });
@@ -248,6 +265,77 @@ async function upsertAttendanceResult(db, userId, date, status, extra = {}) {
   }
 }
 
+async function notifyManagersForApprovalRequest(db, { approvalId, userId, type, reason, startDate, endDate }) {
+  try {
+    const [managerRows] = await db.execute(
+      `SELECT id FROM users WHERE status = 1 AND role IN ('admin', 'manager')`
+    );
+    const managerIds = managerRows.map((row) => row.id).filter((id) => Number(id) !== Number(userId));
+    if (managerIds.length === 0) return;
+
+    await notificationService.createNotificationForUsers(managerIds, {
+      title: `${type}申请待审批`,
+      content: `审批 #${approvalId} 需要处理，日期：${startDate}${endDate && endDate !== startDate ? ` 至 ${endDate}` : ''}，原因：${reason}`,
+      type: 'system',
+    });
+  } catch (err) {
+    logger.warn('发送审批待办通知失败(忽略)', {
+      approvalId,
+      error: err.message,
+    });
+  }
+}
+
+async function updateOutsideCheckinApproval(db, approval, status) {
+  if (!approval.checkin_id) {
+    logger.warn('异常打卡审批缺少关联打卡记录', { approvalId: approval.id });
+    return;
+  }
+
+  const [result] = await db.execute(
+    `UPDATE checkins
+     SET outside_approval_status = ?
+     WHERE id = ? AND approval_request_id = ?`,
+    [status, approval.checkin_id, approval.id]
+  );
+
+  if (result.affectedRows === 0) {
+    logger.warn('异常打卡审批未能回写打卡记录', {
+      approvalId: approval.id,
+      checkinId: approval.checkin_id,
+      status,
+    });
+  }
+}
+
+async function notifyApprovalResult(approval, status, remark) {
+  try {
+    const approved = status === 'approved';
+    const title = approved ? '审批已通过' : '审批已驳回';
+    const contentParts = [
+      `你的${approval.type}申请${approved ? '已通过' : '已驳回'}。`,
+    ];
+    if (approval.type === OUTSIDE_CHECKIN_APPROVAL_TYPE && approval.checkin_id) {
+      contentParts.push(`关联打卡记录：#${approval.checkin_id}。`);
+    }
+    if (remark) {
+      contentParts.push(`备注：${remark}`);
+    }
+
+    await notificationService.createNotification({
+      user_id: approval.user_id,
+      title,
+      content: contentParts.join(''),
+      type: approval.type === OUTSIDE_CHECKIN_APPROVAL_TYPE ? 'checkin' : 'system',
+    });
+  } catch (err) {
+    logger.warn('发送审批结果通知失败(忽略)', {
+      approvalId: approval.id,
+      error: err.message,
+    });
+  }
+}
+
 async function rejectApproval(req, res) {
   try {
     const db = getPool();
@@ -274,6 +362,11 @@ async function rejectApproval(req, res) {
       ['rejected', approver_id, remark || null, approvalId]
     );
 
+    if (approval.type === OUTSIDE_CHECKIN_APPROVAL_TYPE) {
+      await updateOutsideCheckinApproval(db, approval, 'rejected');
+    }
+
+    await notifyApprovalResult(approval, 'rejected', remark);
     res.json(successResponse(null, '审批已驳回'));
   } catch (err) {
     logger.error('审批驳回失败', { error: err.message });
@@ -298,6 +391,9 @@ async function deleteApproval(req, res) {
 
     if (rows[0].status !== 'pending') {
       return res.status(400).json(errorResponse('已处理的审批单不能删除', 400));
+    }
+    if (rows[0].type === OUTSIDE_CHECKIN_APPROVAL_TYPE) {
+      return res.status(400).json(errorResponse('异常打卡审批不能由员工删除', 400));
     }
 
     await db.execute('DELETE FROM approval_requests WHERE id = ?', [approvalId]);

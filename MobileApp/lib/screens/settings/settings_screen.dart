@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import '../../api/dio_client.dart';
 import '../../blocs/chat_settings/chat_settings_cubit.dart';
 import '../../blocs/chat_settings/chat_settings_state.dart';
 import '../../blocs/theme/theme_bloc.dart';
@@ -7,11 +9,37 @@ import '../../blocs/theme/theme_event.dart';
 import '../../blocs/theme/theme_state.dart';
 import '../../core/bento_colors.dart';
 import '../../core/bento_typography.dart';
+import '../../repositories/app_update_repository.dart';
+import '../../widgets/app_update_dialog.dart';
 import '../../widgets/bento_card.dart';
 import 'environment_diagnostics_screen.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  final AppUpdateRepository _updateRepository =
+      AppUpdateRepository(apiClient: ApiClient());
+  String _versionLabel = '读取中';
+  bool _checkingUpdate = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVersion();
+  }
+
+  Future<void> _loadVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    if (!mounted) return;
+    setState(() {
+      _versionLabel = '${info.version}+${info.buildNumber}';
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -219,10 +247,12 @@ class SettingsScreen extends StatelessWidget {
           _buildInfoTile(
             context,
             '版本',
-            '1.0.0',
+            _versionLabel,
             Icons.info_outline,
             colors,
           ),
+          const Divider(height: 24),
+          _buildUpdateTile(context, colors),
           const Divider(height: 24),
           _buildInfoTile(
             context,
@@ -233,6 +263,37 @@ class SettingsScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildUpdateTile(BuildContext context, BentoColors colors) {
+    return ListTile(
+      leading: Icon(Icons.system_update_alt, color: colors.primary),
+      title: Text(
+        '检查更新',
+        style: TextStyle(
+          color: colors.textPrimary,
+          fontSize: 16,
+        ),
+      ),
+      subtitle: Text(
+        _checkingUpdate ? '正在检查最新版本' : '获取新版本并下载安装包',
+        style: TextStyle(
+          color: colors.textSecondary,
+          fontSize: 14,
+        ),
+      ),
+      trailing: _checkingUpdate
+          ? SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: colors.primary,
+              ),
+            )
+          : Icon(Icons.chevron_right, color: colors.textTertiary),
+      onTap: _checkingUpdate ? null : () => _checkForUpdate(context),
     );
   }
 
@@ -261,4 +322,36 @@ class SettingsScreen extends StatelessWidget {
       ),
     );
   }
+
+  Future<void> _checkForUpdate(BuildContext context) async {
+    setState(() {
+      _checkingUpdate = true;
+    });
+
+    try {
+      final update = await _updateRepository.checkLatest();
+      if (!context.mounted) return;
+
+      if (!update.hasUpdate) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('当前已是最新版本')),
+        );
+        return;
+      }
+
+      await AppUpdateDialog.show(context, update);
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('检查更新失败：$e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _checkingUpdate = false;
+        });
+      }
+    }
+  }
+
 }

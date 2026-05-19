@@ -198,6 +198,28 @@ describe('审批管理 API 测试', () => {
       expect(res.body.code).toBe(200);
     });
 
+    test('管理员通过加班申请（标记加班）', async () => {
+      const today = new Date().toISOString().slice(0, 10);
+      const createRes = await request(app)
+        .post('/api/approvals')
+        .set('Authorization', `Bearer ${workerToken}`)
+        .send({
+          type: '加班',
+          reason: '测试加班联动',
+          start_date: today,
+          end_date: today
+        });
+      const overtimeApprovalId = createRes.body.data.id;
+
+      const res = await request(app)
+        .put(`/api/approvals/${overtimeApprovalId}/approve`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ remark: '同意加班' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.code).toBe(200);
+    });
+
     test('重复审批返回 400', async () => {
       // 先创建一个新的待审批申请
       const today = new Date().toISOString().slice(0, 10);

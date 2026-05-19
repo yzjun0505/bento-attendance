@@ -64,6 +64,39 @@ describe('打卡模块 API 测试', () => {
 
       expect(res.status).toBe(401);
     });
+
+    test('围栏外打卡自动生成异常审批', async () => {
+      const projectRes = await request(app)
+        .post('/api/projects')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          name: '围栏审批测试项目_' + Date.now(),
+          address: '围栏中心',
+          latitude: 39.9042,
+          longitude: 116.4074,
+          radius: 100,
+          status: 1
+        });
+
+      expect(projectRes.status).toBe(200);
+
+      const res = await request(app)
+        .post('/api/checkin')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          type: 'clock_in',
+          latitude: 39.0,
+          longitude: 116.0,
+          address: '围栏外测试地址',
+          project_id: projectRes.body.data.id
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.code).toBe(200);
+      expect(res.body.data.is_outside).toBe(1);
+      expect(res.body.data.outside_approval_status).toBe('pending');
+      expect(res.body.data.approval_request_id).toBeTruthy();
+    });
   });
 
   describe('GET /api/checkin', () => {

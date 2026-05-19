@@ -55,14 +55,19 @@ class _EnvironmentDiagnosticsScreenState
 
   Future<_CheckResult> _checkOpenIM() async {
     try {
-      final resp = await Dio()
-          .get('${ApiClient.openIMApiUrl}/healthz')
+      final resp = await Dio(BaseOptions(
+        validateStatus: (status) => status != null && status < 500,
+      ))
+          .get(ApiClient.openIMApiUrl)
           .timeout(const Duration(seconds: 5));
       final ok = resp.statusCode != null &&
           resp.statusCode! >= 200 &&
           resp.statusCode! < 500;
+      final message = resp.statusCode == 404
+          ? 'OpenIM HTTP 可访问（根路径无路由）'
+          : (ok ? 'OpenIM HTTP 可访问' : 'OpenIM 状态异常');
       return _CheckResult(
-          ok: ok, message: ok ? 'OpenIM HTTP 可访问' : 'OpenIM 状态异常');
+          ok: ok, message: message);
     } on DioException catch (e) {
       return _CheckResult(ok: false, message: _networkMessage(e));
     } catch (e) {

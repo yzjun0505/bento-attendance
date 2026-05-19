@@ -13,6 +13,9 @@ const STATUS = {
   LEAVE: 'leave'
 };
 
+const CHECKIN_IN_TYPES = ['in', 'clock_in'];
+const CHECKIN_OUT_TYPES = ['out', 'clock_out'];
+
 async function analyzeAttendance() {
   console.log('⏰ 开始执行考勤分析任务...');
   const db = getPool();
@@ -28,7 +31,8 @@ async function analyzeAttendance() {
     const [groups] = await db.execute(
       `SELECT ag.id, ag.name, ag.work_start_time as start_time, ag.work_end_time as end_time, 
         ag.late_tolerance, ag.early_leave_tolerance, ag.project_id
-       FROM attendance_groups ag`
+       FROM attendance_groups ag
+       WHERE ag.status = 1`
     );
 
     if (groups.length === 0) {
@@ -54,8 +58,8 @@ async function analyzeAttendance() {
           [member.user_id, startOfDay, endOfDay]
         );
 
-        const checkinRecord = checkins.find(c => c.type === 'in');
-        const checkoutRecord = checkins.find(c => c.type === 'out');
+        const checkinRecord = checkins.find(c => CHECKIN_IN_TYPES.includes(c.type));
+        const checkoutRecord = checkins.find(c => CHECKIN_OUT_TYPES.includes(c.type));
 
         let status = STATUS.ABSENT;
         let checkinTime = null;

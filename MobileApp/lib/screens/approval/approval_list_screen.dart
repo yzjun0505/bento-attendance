@@ -190,6 +190,10 @@ class _ApprovalListScreenState extends State<ApprovalListScreen>
         typeColor = colors.warning;
         typeText = '加班申请';
         break;
+      case '异常打卡':
+        typeColor = colors.error;
+        typeText = '异常打卡审批';
+        break;
       default:
         typeColor = colors.textSecondary;
         typeText = type;

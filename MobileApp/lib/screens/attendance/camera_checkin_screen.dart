@@ -19,17 +19,18 @@ import '../../utils/amap_geo_service.dart';
 import '../../utils/coord_utils.dart';
 import '../../utils/weather_service.dart';
 import '../../utils/watermark_service.dart';
+import '../../utils/watermark_renderer.dart';
 import '../../utils/local_album_service.dart';
 import '../../models/watermark_template.dart';
 import 'local_album_screen.dart';
 
 /// 预览水印构建器，与 WatermarkService 的渲染逻辑保持一致
-class _WatermarkPreviewBuilder {
+class WatermarkPreviewBuilder {
   final WatermarkTemplate template;
   final Map<String, String> data;
   final bool isDragging;
 
-  const _WatermarkPreviewBuilder({
+  const WatermarkPreviewBuilder({
     required this.template,
     required this.data,
     this.isDragging = false,
@@ -68,8 +69,8 @@ class _WatermarkPreviewBuilder {
     return '${slot.label}：$value';
   }
 
-  List<_DisplayLine> get _displayLines {
-    final lines = <_DisplayLine>[];
+  List<WatermarkPreviewLine> get _displayLines {
+    final lines = <WatermarkPreviewLine>[];
 
     if (template.titleSlot != null) {
       final ft = template.titleSlot!.fieldType;
@@ -77,7 +78,7 @@ class _WatermarkPreviewBuilder {
       if (enabled) {
         final value = _getSlotValue(template.titleSlot!);
         if (value.isNotEmpty) {
-          lines.add(_DisplayLine(text: value, isTitle: true));
+          lines.add(WatermarkPreviewLine(text: value, isTitle: true));
         }
       }
     }
@@ -88,7 +89,7 @@ class _WatermarkPreviewBuilder {
       if (enabled) {
         final value = _getSlotValue(template.subtitleSlot!);
         if (value.isNotEmpty) {
-          lines.add(_DisplayLine(text: value, isSubtitle: true));
+          lines.add(WatermarkPreviewLine(text: value, isSubtitle: true));
         }
       }
     }
@@ -99,7 +100,7 @@ class _WatermarkPreviewBuilder {
       if (!enabled) continue;
       final text = _getSlotDisplayText(slot);
       if (text.isNotEmpty) {
-        lines.add(_DisplayLine(text: text));
+        lines.add(WatermarkPreviewLine(text: text));
       }
     }
 
@@ -108,7 +109,7 @@ class _WatermarkPreviewBuilder {
       for (final f in fields) {
         final val = _CameraCheckinScreenState._getFieldValueFromData(f, data);
         if (val.isNotEmpty) {
-          lines.add(_DisplayLine(text: val));
+          lines.add(WatermarkPreviewLine(text: val));
         }
       }
     }
@@ -131,7 +132,7 @@ class _WatermarkPreviewBuilder {
     }
   }
 
-  Widget _buildStyledPreview(WatermarkStyle style, List<_DisplayLine> lines) {
+  Widget _buildStyledPreview(WatermarkStyle style, List<WatermarkPreviewLine> lines) {
     final baseFontSize = template.fontSize;
     final textColor = template.textColor;
     final bgColor = template.backgroundColor;
@@ -232,7 +233,7 @@ class _WatermarkPreviewBuilder {
     return BorderRadius.circular(8);
   }
 
-  Widget _buildFullScreenPreview(List<_DisplayLine> lines) {
+  Widget _buildFullScreenPreview(List<WatermarkPreviewLine> lines) {
     final companyName = data['companyName'] ?? '';
     final projectName = data['projectName'] ?? '';
     final text = '$companyName $projectName'.trim();
@@ -268,7 +269,7 @@ class _WatermarkPreviewBuilder {
     );
   }
 
-  Widget _buildQrCodePreview(List<_DisplayLine> lines) {
+  Widget _buildQrCodePreview(List<WatermarkPreviewLine> lines) {
     final qrSize = 60.0;
     final padding = 12.0;
 
@@ -288,7 +289,7 @@ class _WatermarkPreviewBuilder {
             color: Colors.white,
             child: CustomPaint(
               size: Size(qrSize, qrSize),
-              painter: _QrCodePainter(data['antiFakeCode'] ?? ''),
+              painter: PreviewQrCodePainter(data['antiFakeCode'] ?? ''),
             ),
           ),
           SizedBox(width: 10),
@@ -318,19 +319,19 @@ class _WatermarkPreviewBuilder {
   }
 }
 
-class _DisplayLine {
+class WatermarkPreviewLine {
   final String text;
   final bool isTitle;
   final bool isSubtitle;
 
-  _DisplayLine({required this.text, this.isTitle = false, this.isSubtitle = false});
+  WatermarkPreviewLine({required this.text, this.isTitle = false, this.isSubtitle = false});
 }
 
 /// 模拟 QR 码绘制
-class _QrCodePainter extends CustomPainter {
+class PreviewQrCodePainter extends CustomPainter {
   final String code;
 
-  _QrCodePainter(this.code);
+  PreviewQrCodePainter(this.code);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1026,10 +1027,6 @@ class _CameraCheckinScreenState extends State<CameraCheckinScreen> {
     }
     if (!mounted) return;
     try {
-      final size = MediaQuery.of(context).size;
-      double boxWidth = size.width;
-      final screenRatioScale = 604.8 / boxWidth.clamp(1.0, double.infinity);
-
       // 使用与预览相同的水印数据构建逻辑
       final watermarkData = _buildWatermarkData(antiFakeCode: code);
 
@@ -1046,7 +1043,7 @@ class _CameraCheckinScreenState extends State<CameraCheckinScreen> {
         localLogoFile: _localLogoFile,
         template: _selectedTemplate,
         normalizedOffset: _normalizedOffset,
-        scale: _watermarkScale * screenRatioScale,
+        scale: _watermarkScale,
         rotationTurns: _watermarkRotationTurns,
         weather: _weather != '暂无' ? _weather : '暂无天气',
         temperature: _temperature,
@@ -1685,31 +1682,16 @@ class _CameraCheckinScreenState extends State<CameraCheckinScreen> {
                                 dy / boxHeight,
                               );
 
-                              final maxDx = (boxWidth - 120) / boxWidth;
-
-                              final screenHeight =
-                                  MediaQuery.of(context).size.height;
-                              final visibleBoxBottom =
-                                  screenHeight - 160 - topPadding;
-                              var maxPixelY = visibleBoxBottom - 120;
-                              if (maxPixelY > boxHeight - 120) {
-                                maxPixelY = boxHeight - 120;
-                              }
-                              if (maxPixelY < 0) maxPixelY = 0;
-                              final maxDy =
-                                  (maxPixelY / boxHeight).clamp(0.0, 1.0);
-
                               _normalizedOffset = Offset(
-                                _normalizedOffset.dx.clamp(0.0, maxDx),
-                                _normalizedOffset.dy.clamp(0.0, maxDy),
+                                _normalizedOffset.dx.clamp(0.0, 1.0),
+                                _normalizedOffset.dy.clamp(0.0, 1.0),
                               );
                             }
                           });
                         },
                         child: Stack(fit: StackFit.expand, children: [
                           CameraPreview(_cameraController!),
-                          _buildDraggableWatermarkOverlay(
-                              boxWidth, boxHeight, colors),
+                          _buildDraggableWatermarkOverlay(),
                           _buildCameraTopBar(),
                           _buildZoomControls(colors),
                         ])))),
@@ -1783,57 +1765,24 @@ class _CameraCheckinScreenState extends State<CameraCheckinScreen> {
     );
   }
 
-  Widget _buildDraggableWatermarkOverlay(
-      double boxWidth, double boxHeight, BentoColors colors) {
-    final pixelX = (_normalizedOffset.dx * boxWidth);
-    final pixelY = (_normalizedOffset.dy * boxHeight);
+  Widget _buildDraggableWatermarkOverlay() {
+    final template = _selectedTemplate;
+    if (template == null) return const SizedBox.shrink();
 
-    return Positioned(
-      left: pixelX,
-      top: pixelY,
-      child: Transform.scale(
-        scale: _watermarkScale,
-        alignment: Alignment.topLeft,
-        child: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: _isDragging
-                  ? colors.primary
-                  : Colors.white.withValues(alpha: 0.3),
-              width: _isDragging ? 2.5 : 1.5,
-              style: BorderStyle.solid,
-            ),
-            borderRadius: BorderRadius.circular(BentoRadius.md),
-            color: _isDragging
-                ? Colors.black.withValues(alpha: 0.3)
-                : Colors.transparent,
-          ),
-          child: RotatedBox(
-            quarterTurns: _watermarkRotationTurns,
-            child: _renderWatermarkMockup(),
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: CustomPaint(
+          painter: WatermarkPainter(
+            template: template,
+            data: _buildWatermarkData(),
+            normalizedOffset: _normalizedOffset,
+            scale: _watermarkScale,
+            rotationTurns: _watermarkRotationTurns,
+            drawSelection: _isDragging,
           ),
         ),
       ),
     );
-  }
-
-  Widget _renderWatermarkMockup() {
-    final template = _selectedTemplate;
-    if (template == null) {
-      return const SizedBox.shrink();
-    }
-
-    // 使用与 WatermarkService 相同的数据构建逻辑
-    final watermarkData = _buildWatermarkData();
-
-    final builder = _WatermarkPreviewBuilder(
-      template: template,
-      data: watermarkData,
-      isDragging: _isDragging,
-    );
-
-    return builder.build(context);
   }
 
   Widget _buildCameraTopBar() {
@@ -2144,10 +2093,16 @@ class _CameraCheckinScreenState extends State<CameraCheckinScreen> {
                                         left: 12,
                                         bottom: 12,
                                         right: 12,
-                                        child: _WatermarkPreviewBuilder(
-                                          template: template,
-                                          data: _buildWatermarkData(),
-                                        ).build(context),
+                                        height: 120,
+                                        child: CustomPaint(
+                                          painter: WatermarkPainter(
+                                            template: template,
+                                            data: _buildWatermarkData(),
+                                            normalizedOffset:
+                                                const Offset(0.02, 0.28),
+                                            scale: 0.62,
+                                          ),
+                                        ),
                                       ),
                                       if (isActive)
                                         Positioned(

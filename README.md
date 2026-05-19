@@ -40,6 +40,14 @@
 - **审批管理** - 请假、外出审批流程
 - **数据分析** - 考勤统计、报表导出
 - **水印模板** - 自定义水印样式配置
+- **AI 数据助理** - 可拖动悬浮助手，支持自然语言查询考勤、项目、审批、报表和确认式业务操作
+
+### 🤖 AI 助手能力
+- **对话查数据** - 查询今日/本周/本月出勤、异常打卡、项目外勤、员工个人考勤、审批待办
+- **结构化结果** - 自动返回统计卡片、表格和图表数据，Web 管理端可直接展示
+- **确认式操作** - 导出报表、发送通知、创建排班等操作需要二次确认后才执行
+- **多端接入** - Web 管理端和 Flutter 移动端都内置可拖动 AI 小人入口
+- **安全兜底** - AI 只通过后端受控工具访问数据，继承当前登录用户权限；未配置模型时使用本地数据模式
 
 ### 🔧 后端服务 (Node.js)
 - **RESTful API** - 标准化接口设计
@@ -158,6 +166,12 @@ DB_PASSWORD=your_password
 DB_NAME=user_information
 JWT_SECRET=your_jwt_secret
 AMAP_KEY=your_amap_web_service_key
+
+# AI 助手（兼容 OpenAI 风格接口，不配置时仍可使用本地数据模式）
+AI_API_KEY=your_ai_api_key
+AI_BASE_URL=https://api.openai.com/v1
+AI_MODEL=your_model_name
+AI_TIMEOUT_MS=30000
 ```
 
 ### MobileApp 运行参数

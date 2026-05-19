@@ -48,6 +48,8 @@ class _HomeScreenState extends State<HomeScreen>
   StreamSubscription? _convSubscription;
   StreamSubscription? _msgSubscription;
   StreamSubscription<int>? _imUnreadSubscription;
+  StreamSubscription? _imConnectionSubscription;
+  im_service.ConnectionState _imConnectionState = im_service.ConnectionState.disconnected;
 
   /// 防抖加载 IM 数据（避免 stream 频繁触发多次刷新）
   void _debouncedLoadIMData() {
@@ -89,7 +91,10 @@ class _HomeScreenState extends State<HomeScreen>
     });
 
     // 监听 IM 连接状态，连接成功后延迟加载数据（SDK 需要时间同步）
-    _imService.connectionStream.listen((state) {
+    _imConnectionSubscription = _imService.connectionStream.listen((state) {
+      if (mounted) {
+        setState(() => _imConnectionState = state);
+      }
       if (state == im_service.ConnectionState.connected) {
         // SDK 连接成功后需要一点时间同步数据，延迟加载
         Future.delayed(const Duration(seconds: 2), () => _loadIMData());
@@ -149,6 +154,7 @@ class _HomeScreenState extends State<HomeScreen>
     _convSubscription?.cancel();
     _msgSubscription?.cancel();
     _imUnreadSubscription?.cancel();
+    _imConnectionSubscription?.cancel();
     _pulseController.dispose();
     _openSwipe.dispose();
     super.dispose();
@@ -359,6 +365,9 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildChatSection(BuildContext context, BentoColors colors, ThemeData theme) {
     final imReady = _imService.isInitialized;
     final imLoggedIn = _imService.isLoggedIn;
+    final imStillConnecting = _imConnectionState == im_service.ConnectionState.connecting;
+    final imStatusTitle = imStillConnecting ? '即时通讯连接中...' : '即时通讯暂未连接';
+    final imStatusSubtitle = imStillConnecting ? '正在同步消息与联系人，请稍候' : '正在重新获取连接凭证，可稍后重试';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -399,14 +408,14 @@ class _HomeScreenState extends State<HomeScreen>
                   BentoLoading.spinner(size: 24),
                   const SizedBox(height: 12),
                   Text(
-                    '即时通讯连接中...',
+                    imStatusTitle,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: colors.textSecondary,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '正在同步消息与联系人，请稍候',
+                    imStatusSubtitle,
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: colors.textTertiary,
                     ),

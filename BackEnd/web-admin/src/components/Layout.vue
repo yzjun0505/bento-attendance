@@ -99,6 +99,8 @@
       </router-view>
     </main>
 
+    <FloatingAIAssistant />
+
     <!-- 个人信息对话框 -->
     <el-dialog v-model="profileDialogVisible" title="个人信息" width="480" :close-on-click-modal="false" class="dark-dialog">
       <el-form :model="profileForm" label-width="80px" label-position="right">
@@ -145,6 +147,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { getCurrentUser, updateCurrentUser, changePassword } from '@/api/users'
+import FloatingAIAssistant from '@/components/ai/FloatingAIAssistant.vue'
 
 const route = useRoute()
 const router = useRouter()
