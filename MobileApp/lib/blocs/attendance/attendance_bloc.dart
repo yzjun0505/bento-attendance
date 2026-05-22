@@ -15,6 +15,7 @@ import '../../utils/amap_geo_service.dart';
 import '../../utils/coord_utils.dart';
 import '../../models/checkin_model.dart';
 import '../../models/checkin_type_model.dart';
+import '../../services/local_notification_service.dart';
 import 'attendance_event.dart';
 import 'attendance_state.dart';
 
@@ -40,6 +41,9 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
   final OfflineCheckinRepository _offlineRepository =
       OfflineCheckinRepository();
   final ApiClient _apiClient = ApiClient();
+  Timer? _reminderTimer;
+  bool _clockInReminderSent = false;
+  bool _lateReminderSent = false;
 
   AttendanceBloc({
     required this.projectRepository,
@@ -51,6 +55,73 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
     on<SubmitCheckin>(_onSubmitCheckin);
     on<SelectCheckinType>(_onSelectCheckinType);
     on<SelectProject>(_onSelectProject);
+  }
+
+  /// 启动打卡提醒定时器（每30秒检查一次）
+  void _startReminderTimer() {
+    _reminderTimer?.cancel();
+    _reminderTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _checkAttendanceReminders();
+    });
+  }
+
+  /// 检查并发送打卡提醒
+  void _checkAttendanceReminders() {
+    if (state is! AttendanceLoaded) return;
+    final s = state as AttendanceLoaded;
+
+    // 如果在围栏内且未打上班卡：提醒
+    if (s.isInsideGeofence && !s.isClockInCompleted && !_clockInReminderSent) {
+      _clockInReminderSent = true;
+      final projectName = s.activeProjectName;
+      LocalNotificationService().showAttendanceReminder(
+        title: '📍 打卡提醒',
+        body: '您已在「$projectName」围栏内，请及时上班打卡',
+      );
+    }
+
+    // 如果不在围栏内，重置围栏提醒标记
+    if (!s.isInsideGeofence) {
+      _clockInReminderSent = false;
+    }
+
+    // 迟到提醒：超过上班时间且未打卡
+    if (!s.isClockInCompleted && !_lateReminderSent && s.todayShiftStart != null) {
+      final now = DateTime.now();
+      final startParts = s.todayShiftStart!.split(':');
+      if (startParts.length >= 2) {
+        final startHour = int.tryParse(startParts[0]) ?? 9;
+        final startMin = int.tryParse(startParts[1]) ?? 0;
+        final workStart = DateTime(now.year, now.month, now.day, startHour, startMin);
+        final lateThreshold = workStart.add(Duration(minutes: s.lateTolerance + 5));
+        if (now.isAfter(lateThreshold)) {
+          _lateReminderSent = true;
+          LocalNotificationService().showAttendanceReminder(
+            title: '⏰ 迟到提醒',
+            body: '当前时间已超过上班打卡时间，请注意',
+          );
+        }
+      }
+    }
+
+    // 下班提醒：超过下班时间且未打下班卡（但已打上班卡）
+    if (s.isClockInCompleted && !s.isClockOutCompleted && s.todayShiftEnd != null) {
+      final now = DateTime.now();
+      final endParts = s.todayShiftEnd!.split(':');
+      if (endParts.length >= 2) {
+        final endHour = int.tryParse(endParts[0]) ?? 18;
+        final endMin = int.tryParse(endParts[1]) ?? 0;
+        final workEnd = DateTime(now.year, now.month, now.day, endHour, endMin);
+        // 下班时间到后的5分钟内提醒一次
+        final reminderWindow = workEnd.add(const Duration(minutes: 5));
+        if (now.isAfter(workEnd) && now.isBefore(reminderWindow)) {
+          LocalNotificationService().showAttendanceReminder(
+            title: '🏠 下班提醒',
+            body: '已到下班时间，请及时打卡',
+          );
+        }
+      }
+    }
   }
 
   /// 获取当前用户所属考勤组
@@ -98,8 +169,13 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
           debugPrint('获取项目失败: $e');
           return <Project>[];
         }),
+        // 同时加载最近记录和今日记录
         checkinRepository.getMyCheckins(page: 1, pageSize: 5).catchError((e) {
           debugPrint('获取历史失败: $e');
+          return <Checkin>[];
+        }),
+        checkinRepository.getTodayCheckins().catchError((e) {
+          debugPrint('获取今日打卡失败: $e');
           return <Checkin>[];
         }),
         checkinTypeRepository.getCheckinTypes().catchError((e) {
@@ -121,11 +197,15 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
       ]);
 
       final projects = results[0] as List<Project>;
-      final history = results[1] as List<Checkin>;
-      final checkinTypes = results[2] as List<CheckinType>;
-      final groupInfo = results[3] as _AttendanceGroupInfo?;
-      final todaySchedule = results[4] as Map<String, dynamic>?;
-      final offlineCount = results[5] as int? ?? 0;
+      final recent = results[1] as List<Checkin>;
+      final todayCheckins = results[2] as List<Checkin>;
+      final checkinTypes = results[3] as List<CheckinType>;
+      final groupInfo = results[4] as _AttendanceGroupInfo?;
+      final todaySchedule = results[5] as Map<String, dynamic>?;
+      final offlineCount = results[6] as int? ?? 0;
+
+      // 合并今日打卡和最近记录，今日打卡优先（用于正确判断上下班状态）
+      final mergedHistory = _mergeCheckins(todayCheckins, recent);
 
       // 立即触发一次 Loaded 状态（哪怕还没拿到精确定位），让 UI 先显示出来
       // 如果已有旧坐标，先沿用
@@ -150,7 +230,7 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
 
       emit(AttendanceLoaded(
         projects: projects,
-        recentHistory: history,
+        recentHistory: mergedHistory,
         checkinTypes: checkinTypes,
         nearbyProjects: const [],
         currentLatitude: lastLat,
@@ -168,7 +248,10 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
       ));
 
       // 异步获取位置，不阻塞主流程
-      _refreshLocation(projects, history, checkinTypes);
+      _refreshLocation(projects, mergedHistory, checkinTypes);
+
+      // 启动打卡提醒定时器
+      _startReminderTimer();
     } catch (e) {
       if (isFirstLoad) {
         emit(AttendanceError(message: '加载数据失败: $e'));
@@ -409,6 +492,29 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
         needsProjectConfirmation: false,
       ));
     }
+  }
+
+  /// 合并今日打卡记录和最近记录，按id去重，今日记录优先
+  List<Checkin> _mergeCheckins(List<Checkin> today, List<Checkin> recent) {
+    final ids = <int>{};
+    final merged = <Checkin>[];
+    // 先加今日打卡
+    for (final c in today) {
+      if (!ids.contains(c.id)) {
+        ids.add(c.id);
+        merged.add(c);
+      }
+    }
+    // 再加最近记录，去重
+    for (final c in recent) {
+      if (!ids.contains(c.id)) {
+        ids.add(c.id);
+        merged.add(c);
+      }
+    }
+    // 按时间倒序
+    merged.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return merged;
   }
 
   List<Project> _findNearbyProjectsFromCoords(

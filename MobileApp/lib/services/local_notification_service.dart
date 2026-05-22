@@ -11,6 +11,8 @@ class LocalNotificationService with WidgetsBindingObserver {
 
   static const _chatChannelId = 'chat_messages';
   static const _chatChannelName = '聊天消息';
+  static const _attendanceChannelId = 'attendance_reminders';
+  static const _attendanceChannelName = '打卡提醒';
 
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
@@ -38,6 +40,7 @@ class LocalNotificationService with WidgetsBindingObserver {
 
     if (!kIsWeb && Platform.isAndroid) {
       await _ensureAndroidChannel();
+      await _ensureAttendanceChannel();
     }
     _initialized = true;
 
@@ -59,6 +62,25 @@ class LocalNotificationService with WidgetsBindingObserver {
         _chatChannelName,
         description: '聊天消息提醒',
         importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+        showBadge: true,
+      ),
+    );
+  }
+
+  Future<void> _ensureAttendanceChannel() async {
+    if (kIsWeb) return;
+    if (!Platform.isAndroid) return;
+    final impl = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    if (impl == null) return;
+    await impl.createNotificationChannel(
+      const AndroidNotificationChannel(
+        _attendanceChannelId,
+        _attendanceChannelName,
+        description: '打卡提醒（围栏进入、迟到、下班）',
+        importance: Importance.high,
         playSound: true,
         enableVibration: true,
         showBadge: true,
@@ -127,6 +149,37 @@ class LocalNotificationService with WidgetsBindingObserver {
     _inForeground = state == AppLifecycleState.resumed;
     if (_inForeground) {
       clearAll();
+    }
+  }
+
+  /// 打卡提醒通知
+  Future<void> showAttendanceReminder({
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
+    if (!_initialized) return;
+    await _ensurePermissionForShow();
+
+    const androidDetails = AndroidNotificationDetails(
+      _attendanceChannelId,
+      _attendanceChannelName,
+      channelDescription: '打卡提醒',
+      importance: Importance.high,
+      priority: Priority.high,
+      icon: '@mipmap/ic_launcher',
+      playSound: true,
+      enableVibration: true,
+    );
+    const iosDetails = DarwinNotificationDetails(
+        presentAlert: true, presentBadge: true, presentSound: true);
+
+    final details =
+        NotificationDetails(android: androidDetails, iOS: iosDetails);
+    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+      await _plugin.show(
+          DateTime.now().millisecondsSinceEpoch, title, body, details,
+          payload: payload);
     }
   }
 
