@@ -11,7 +11,8 @@ class AmapGeoService {
   /// 高德 Web 服务 Key（REST API 必须使用「Web服务」类型的 Key）
   /// 注意：Android/iOS SDK Key 不能用于 REST API（会返回 USERKEY_PLAT_NOMATCH）
   /// 请在运行时通过 --dart-define=AMAP_KEY=your_key 传入
-  static const String _apiKey = String.fromEnvironment('AMAP_KEY', defaultValue: 'ae275848401da60cbf76669fdc22b450');
+  static const String _apiKey = String.fromEnvironment('AMAP_KEY',
+      defaultValue: 'ae275848401da60cbf76669fdc22b450');
 
   static final Dio _dio = Dio(BaseOptions(
     connectTimeout: const Duration(seconds: 10),
@@ -139,7 +140,8 @@ class AmapGeoService {
     int offset = 20,
   }) async {
     try {
-      debugPrint('🔍 高德周边搜索: lat=$latitude, lng=$longitude, keywords=$keywords');
+      debugPrint(
+          '🔍 高德周边搜索: lat=$latitude, lng=$longitude, keywords=$keywords');
       final response = await _dio.get(_placeAroundUrl, queryParameters: {
         'key': _apiKey,
         'location':
@@ -155,7 +157,8 @@ class AmapGeoService {
 
       if (response.statusCode == 200 && response.data != null) {
         final data = response.data;
-        debugPrint('🔍 高德周边搜索响应: status=${data['status']}, info=${data['info']}, pois数量=${data['pois']?.length ?? 0}');
+        debugPrint(
+            '🔍 高德周边搜索响应: status=${data['status']}, info=${data['info']}, pois数量=${data['pois']?.length ?? 0}');
         if (data['status'] == '1' && data['pois'] is List) {
           final places = (data['pois'] as List)
               .whereType<Map<String, dynamic>>()

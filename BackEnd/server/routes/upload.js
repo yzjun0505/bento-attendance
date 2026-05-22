@@ -40,6 +40,12 @@ const upload = multer({
   }
 });
 
+function getPublicBaseUrl(req) {
+  const configured = process.env.PUBLIC_BASE_URL || process.env.APP_PUBLIC_URL || '';
+  if (configured) return configured.replace(/\/+$/, '');
+  return `${req.protocol}://${req.get('host')}`;
+}
+
 router.use(authMiddleware);
 
 router.post('/photo', upload.single('photo'), (req, res) => {
@@ -48,10 +54,12 @@ router.post('/photo', upload.single('photo'), (req, res) => {
       return res.status(400).json(errorResponse('未收到照片文件', 400));
     }
 
-    const fileUrl = `/uploads/photos/${req.file.filename}`;
+    const filePath = `/uploads/photos/${req.file.filename}`;
+    const fileUrl = `${getPublicBaseUrl(req)}${filePath}`;
     
     res.json(successResponse({
       url: fileUrl,
+      path: filePath,
       filename: req.file.filename,
       size: req.file.size
     }, '照片上传成功'));

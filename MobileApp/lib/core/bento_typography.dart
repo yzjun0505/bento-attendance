@@ -6,18 +6,35 @@ import 'bento_colors.dart';
 class BentoTypography {
   // --- 暗色排版 ---
   static TextTheme darkTextTheme() => const TextTheme(
-    displayLarge: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, height: 36 / 28, letterSpacing: -0.5),
-    headlineLarge: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, height: 32 / 24, letterSpacing: -0.3),
-    headlineMedium: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, height: 28 / 20),
-    titleLarge: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, height: 24 / 18),
-    titleMedium: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, height: 22 / 16),
-    bodyLarge: TextStyle(fontSize: 16, fontWeight: FontWeight.normal, height: 24 / 16),
-    bodyMedium: TextStyle(fontSize: 14, fontWeight: FontWeight.normal, height: 20 / 14),
-    bodySmall: TextStyle(fontSize: 12, fontWeight: FontWeight.normal, height: 16 / 12),
-    labelLarge: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, height: 20 / 14),
-    labelMedium: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, height: 16 / 12),
-    labelSmall: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, height: 14 / 10),
-  );
+        displayLarge: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            height: 36 / 28,
+            letterSpacing: -0.5),
+        headlineLarge: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            height: 32 / 24,
+            letterSpacing: -0.3),
+        headlineMedium: TextStyle(
+            fontSize: 20, fontWeight: FontWeight.w600, height: 28 / 20),
+        titleLarge: TextStyle(
+            fontSize: 18, fontWeight: FontWeight.w600, height: 24 / 18),
+        titleMedium: TextStyle(
+            fontSize: 16, fontWeight: FontWeight.w500, height: 22 / 16),
+        bodyLarge: TextStyle(
+            fontSize: 16, fontWeight: FontWeight.normal, height: 24 / 16),
+        bodyMedium: TextStyle(
+            fontSize: 14, fontWeight: FontWeight.normal, height: 20 / 14),
+        bodySmall: TextStyle(
+            fontSize: 12, fontWeight: FontWeight.normal, height: 16 / 12),
+        labelLarge: TextStyle(
+            fontSize: 14, fontWeight: FontWeight.w600, height: 20 / 14),
+        labelMedium: TextStyle(
+            fontSize: 12, fontWeight: FontWeight.w500, height: 16 / 12),
+        labelSmall: TextStyle(
+            fontSize: 10, fontWeight: FontWeight.w500, height: 14 / 10),
+      );
 
   // --- 亮色排版（同暗色，颜色由 ThemeData.colorScheme 控制）---
   static TextTheme lightTextTheme() => darkTextTheme();
@@ -125,9 +142,13 @@ ThemeData bentoLightTheme() {
       height: 64,
       labelTextStyle: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: colors.primary);
+          return TextStyle(
+              fontSize: 12, fontWeight: FontWeight.w600, color: colors.primary);
         }
-        return TextStyle(fontSize: 12, fontWeight: FontWeight.normal, color: colors.textTertiary);
+        return TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.normal,
+            color: colors.textTertiary);
       }),
       iconTheme: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
@@ -140,7 +161,8 @@ ThemeData bentoLightTheme() {
     bottomSheetTheme: BottomSheetThemeData(
       backgroundColor: colors.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(BentoRadius.lg)),
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(BentoRadius.lg)),
       ),
     ),
     // 对话框
@@ -233,9 +255,13 @@ ThemeData bentoDarkTheme() {
       height: 64,
       labelTextStyle: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: colors.primary);
+          return TextStyle(
+              fontSize: 12, fontWeight: FontWeight.w600, color: colors.primary);
         }
-        return TextStyle(fontSize: 12, fontWeight: FontWeight.normal, color: colors.textTertiary);
+        return TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.normal,
+            color: colors.textTertiary);
       }),
       iconTheme: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
@@ -247,7 +273,8 @@ ThemeData bentoDarkTheme() {
     bottomSheetTheme: BottomSheetThemeData(
       backgroundColor: colors.surface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(BentoRadius.lg)),
+        borderRadius:
+            BorderRadius.vertical(top: Radius.circular(BentoRadius.lg)),
       ),
     ),
     dialogTheme: DialogThemeData(

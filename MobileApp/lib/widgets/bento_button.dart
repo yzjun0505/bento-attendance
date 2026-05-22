@@ -155,10 +155,12 @@ class _BentoButtonState extends State<BentoButton> {
 
     return GestureDetector(
       onTapDown: isDisabled ? null : (_) => setState(() => _pressed = true),
-      onTapUp: isDisabled ? null : (_) {
-        setState(() => _pressed = false);
-        widget.onPressed?.call();
-      },
+      onTapUp: isDisabled
+          ? null
+          : (_) {
+              setState(() => _pressed = false);
+              widget.onPressed?.call();
+            },
       onTapCancel: isDisabled ? null : () => setState(() => _pressed = false),
       child: AnimatedScale(
         scale: _pressed ? 0.97 : 1.0,

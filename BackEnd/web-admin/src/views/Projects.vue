@@ -58,11 +58,18 @@
             <el-icon><User /></el-icon>
             <span>关联人员: {{ project.user_count || 0 }}人</span>
           </div>
+          <div class="project-info-item">
+            <el-icon><UserFilled /></el-icon>
+            <span>项目经理: {{ formatManagers(project) }}</span>
+          </div>
         </div>
 
         <div class="project-card-footer">
           <el-button type="primary" text size="small" @click="openDialog(project)">
             <el-icon><Edit /></el-icon>编辑
+          </el-button>
+          <el-button v-if="isAdmin" type="success" text size="small" @click="openAuthDialog(project)">
+            <el-icon><UserFilled /></el-icon>授权
           </el-button>
           <el-button type="danger" text size="small" @click="handleDelete(project)">
             <el-icon><Delete /></el-icon>删除
@@ -128,23 +135,69 @@
       </template>
     </el-dialog>
 
+    <el-dialog
+      v-model="authDialogVisible"
+      title="项目授权"
+      width="520px"
+      :close-on-click-modal="false"
+    >
+      <el-form label-width="90px">
+        <el-form-item label="项目">
+          <el-input :model-value="authorizingProject?.name || ''" disabled />
+        </el-form-item>
+        <el-form-item label="项目经理" required>
+          <el-select
+            v-model="selectedManagerIds"
+            multiple
+            filterable
+            placeholder="请选择项目经理"
+            style="width: 100%"
+            :loading="authLoading"
+          >
+            <el-option
+              v-for="manager in managerOptions"
+              :key="manager.id"
+              :label="`${manager.name || manager.username}（${manager.username}）`"
+              :value="manager.id"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="authDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="authSaving" @click="handleSaveAuth">保存授权</el-button>
+      </template>
+    </el-dialog>
+
     <AmapSelector v-model="amapDialogVisible" :initial-lat="dialogForm.latitude" :initial-lng="dialogForm.longitude" @select="handleAmapSelect" />
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { getProjects, createProject, updateProject, deleteProject } from '@/api/projects'
+import { getUsers } from '@/api/users'
+import { getProjectManagers, bindProjectManager, unbindProjectManager } from '@/api/projectManagers'
+import { useUserStore } from '@/store/user'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Search, OfficeBuilding, Location, Aim, User, Edit, Delete } from '@element-plus/icons-vue'
+import { Plus, Search, OfficeBuilding, Location, Aim, User, UserFilled, Edit, Delete } from '@element-plus/icons-vue'
 import AmapSelector from '@/components/AmapSelector.vue'
 
 const loading = ref(false)
 const saving = ref(false)
+const authLoading = ref(false)
+const authSaving = ref(false)
 const tableData = ref([])
 const dialogVisible = ref(false)
+const authDialogVisible = ref(false)
 const editingProject = ref(null)
+const authorizingProject = ref(null)
 const dialogFormRef = ref(null)
+const managerOptions = ref([])
+const authRows = ref([])
+const selectedManagerIds = ref([])
+const userStore = useUserStore()
+const isAdmin = computed(() => userStore.userInfo?.role === 'admin')
 
 const filters = reactive({ keyword: '', status: '' })
 const pagination = reactive({ page: 1, pageSize: 20, total: 0 })
@@ -172,6 +225,13 @@ function handleAmapSelect(location) {
 }
 
 onMounted(() => loadData())
+
+function formatManagers(project) {
+  if (project.managers?.length) {
+    return project.managers.map((manager) => manager.name || manager.username).join('、')
+  }
+  return '未授权'
+}
 
 async function loadData() {
   loading.value = true
@@ -226,6 +286,60 @@ async function handleDelete(row) {
     loadData()
   } catch (e) {
     ElMessage.error(e.response?.data?.message || '删除失败')
+  }
+}
+
+async function loadManagerOptions() {
+  const res = await getUsers({ role: 'manager', status: 1, page: 1, pageSize: 1000 })
+  managerOptions.value = res.data.list || []
+}
+
+async function openAuthDialog(project) {
+  authorizingProject.value = project
+  authDialogVisible.value = true
+  authLoading.value = true
+  try {
+    if (managerOptions.value.length === 0) {
+      await loadManagerOptions()
+    }
+    const res = await getProjectManagers({ project_id: project.id })
+    authRows.value = res.data || []
+    selectedManagerIds.value = authRows.value.map((item) => item.manager_id)
+  } catch (e) {
+    ElMessage.error(e.response?.data?.message || '加载授权信息失败')
+  } finally {
+    authLoading.value = false
+  }
+}
+
+async function handleSaveAuth() {
+  if (!authorizingProject.value) return
+  if (selectedManagerIds.value.length === 0) {
+    ElMessage.warning('请至少选择一名项目经理')
+    return
+  }
+
+  const currentIds = new Set(authRows.value.map((item) => item.manager_id))
+  const nextIds = new Set(selectedManagerIds.value)
+  const additions = selectedManagerIds.value.filter((id) => !currentIds.has(id))
+  const removals = authRows.value.filter((item) => !nextIds.has(item.manager_id))
+
+  authSaving.value = true
+  try {
+    await Promise.all([
+      ...additions.map((managerId) => bindProjectManager({
+        manager_id: managerId,
+        project_id: authorizingProject.value.id
+      })),
+      ...removals.map((item) => unbindProjectManager(item.id))
+    ])
+    ElMessage.success('项目授权已更新')
+    authDialogVisible.value = false
+    await loadData()
+  } catch (e) {
+    ElMessage.error(e.response?.data?.message || e.message || '保存授权失败')
+  } finally {
+    authSaving.value = false
   }
 }
 </script>

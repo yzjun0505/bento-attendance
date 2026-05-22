@@ -12,7 +12,7 @@ import '../repositories/app_update_repository.dart';
 import '../api/dio_client.dart';
 import '../widgets/app_update_dialog.dart';
 import '../widgets/offline_banner.dart';
-import 'home/home_screen.dart';
+import 'chat/tuikit_chat_screen.dart';
 import 'attendance/map_dashboard_screen.dart';
 import 'history/history_screen.dart';
 import 'profile/profile_screen.dart';
@@ -25,7 +25,7 @@ class MainNavigation extends StatefulWidget {
 }
 
 class MainNavigationState extends State<MainNavigation> {
-  int _currentIndex = 0; // 默认看板页
+  int _currentIndex = 2; // 默认打卡页（IM 登录完成前消息/通讯录显示加载中）
   final AppUpdateRepository _updateRepository =
       AppUpdateRepository(apiClient: ApiClient());
   bool _checkedUpdate = false;
@@ -63,6 +63,8 @@ class MainNavigationState extends State<MainNavigation> {
     return BlocBuilder<AuthBloc, AuthState>(
       builder: (context, authState) {
         final isOffline = authState is AuthAuthenticated && authState.isOffline;
+        final isIMReady =
+            authState is AuthAuthenticated && authState.imInitialized;
         return Scaffold(
           body: Column(
             children: [
@@ -73,11 +75,20 @@ class MainNavigationState extends State<MainNavigation> {
               Expanded(
                 child: IndexedStack(
                   index: _currentIndex,
-                  children: const [
-                    HomeScreen(),
-                    MapDashboardScreen(),
-                    HistoryScreen(),
-                    ProfileScreen(),
+                  children: [
+                    // TUIKit 页面需要等 IM 登录完成后才能渲染，
+                    // 否则 ConversationsPage/ContactsPage 在未登录状态下会闪退
+                    if (isIMReady)
+                      const TUIKitConversationsScreen()
+                    else
+                      const _IMLoadingPlaceholder(label: '消息'),
+                    if (isIMReady)
+                      const TUIKitContactsScreen()
+                    else
+                      const _IMLoadingPlaceholder(label: '通讯录'),
+                    const MapDashboardScreen(),
+                    const HistoryScreen(),
+                    const ProfileScreen(),
                   ],
                 ),
               ),
@@ -94,9 +105,6 @@ class MainNavigationState extends State<MainNavigation> {
               selectedIndex: _currentIndex,
               onDestinationSelected: (index) {
                 setState(() => _currentIndex = index);
-                if (index == 0) {
-                  context.read<HomeBloc>().add(const LoadHomeSummary(silent: true));
-                }
               },
               backgroundColor: Colors.transparent,
               elevation: 0,
@@ -109,14 +117,19 @@ class MainNavigationState extends State<MainNavigation> {
                   label: '消息',
                 ),
                 NavigationDestination(
+                  icon: Icon(Icons.people_outline),
+                  selectedIcon: Icon(Icons.people),
+                  label: '通讯录',
+                ),
+                NavigationDestination(
                   icon: Icon(Icons.location_on_outlined),
                   selectedIcon: Icon(Icons.location_on),
                   label: '打卡',
                 ),
                 NavigationDestination(
-                  icon: Icon(Icons.history_toggle_off),
-                  selectedIcon: Icon(Icons.history),
-                  label: '明细',
+                  icon: Icon(Icons.dashboard_outlined),
+                  selectedIcon: Icon(Icons.dashboard),
+                  label: '工作台',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.person_outline),
@@ -128,6 +141,34 @@ class MainNavigationState extends State<MainNavigation> {
           ),
         );
       },
+    );
+  }
+}
+
+/// IM 登录完成前的占位加载页面
+class _IMLoadingPlaceholder extends StatelessWidget {
+  final String label;
+  const _IMLoadingPlaceholder({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text(
+              '正在连接$label服务...',
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

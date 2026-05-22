@@ -2,17 +2,18 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:getuiflut/getuiflut.dart';
 
 class LocalNotificationService with WidgetsBindingObserver {
-  static final LocalNotificationService _instance = LocalNotificationService._internal();
+  static final LocalNotificationService _instance =
+      LocalNotificationService._internal();
   factory LocalNotificationService() => _instance;
   LocalNotificationService._internal();
 
   static const _chatChannelId = 'chat_messages';
   static const _chatChannelName = '聊天消息';
 
-  final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _plugin =
+      FlutterLocalNotificationsPlugin();
   bool _initialized = false;
   bool _inForeground = true;
 
@@ -27,7 +28,8 @@ class LocalNotificationService with WidgetsBindingObserver {
     }
 
     WidgetsBinding.instance.addObserver(this);
-    _inForeground = WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+    _inForeground =
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
 
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
     const ios = DarwinInitializationSettings();
@@ -47,7 +49,8 @@ class LocalNotificationService with WidgetsBindingObserver {
   Future<void> _ensureAndroidChannel() async {
     if (kIsWeb) return;
     if (!Platform.isAndroid) return;
-    final impl = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    final impl = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
     if (impl == null) return;
     await impl.deleteNotificationChannel('chat_messages_v2');
     await impl.createNotificationChannel(
@@ -65,11 +68,13 @@ class LocalNotificationService with WidgetsBindingObserver {
 
   Future<void> _requestPermission() async {
     if (Platform.isAndroid) {
-      final impl = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      final impl = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
       await impl?.requestNotificationsPermission();
     }
     if (Platform.isIOS) {
-      final impl = _plugin.resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
+      final impl = _plugin.resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin>();
       await impl?.requestPermissions(alert: true, badge: true, sound: true);
     }
   }
@@ -94,17 +99,22 @@ class LocalNotificationService with WidgetsBindingObserver {
       channelShowBadge: true,
       category: AndroidNotificationCategory.message,
     );
-    const iosDetails = DarwinNotificationDetails(presentAlert: true, presentBadge: true, presentSound: true);
+    const iosDetails = DarwinNotificationDetails(
+        presentAlert: true, presentBadge: true, presentSound: true);
 
-    final details = const NotificationDetails(android: androidDetails, iOS: iosDetails);
+    const details =
+        NotificationDetails(android: androidDetails, iOS: iosDetails);
     if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-      await _plugin.show(DateTime.now().millisecondsSinceEpoch, title, body, details, payload: payload);
+      await _plugin.show(
+          DateTime.now().millisecondsSinceEpoch, title, body, details,
+          payload: payload);
     }
   }
 
   Future<void> _ensurePermissionForShow() async {
     if (Platform.isAndroid) {
-      final impl = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      final impl = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
       final enabled = await impl?.areNotificationsEnabled();
       if (enabled == false) {
         await impl?.requestNotificationsPermission();
@@ -123,12 +133,6 @@ class LocalNotificationService with WidgetsBindingObserver {
   Future<void> clearAll() async {
     if (!_initialized) return;
     await _plugin.cancelAll();
-    if (Platform.isAndroid) {
-      try {
-        Getuiflut().setBadge(0);
-      } catch (e) {
-        debugPrint('清除角标失败: $e');
-      }
-    }
+    // 清除推送角标逻辑
   }
 }

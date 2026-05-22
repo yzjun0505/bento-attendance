@@ -79,8 +79,9 @@ class AttendanceLoaded extends AttendanceState {
   /// 当前有效的项目名称
   String get activeProjectName {
     if (selectedProjectId != null) {
-      final project = nearbyProjects.where((p) => p.id == selectedProjectId).firstOrNull ??
-          projects.where((p) => p.id == selectedProjectId).firstOrNull;
+      final project =
+          nearbyProjects.where((p) => p.id == selectedProjectId).firstOrNull ??
+              projects.where((p) => p.id == selectedProjectId).firstOrNull;
       return project?.name ?? '未知项目';
     }
     return nearestProject?.name ?? '未关联项目';
@@ -135,7 +136,8 @@ class AttendanceLoaded extends AttendanceState {
       nearestProject: nearestProject ?? this.nearestProject,
       distanceToNearest: distanceToNearest ?? this.distanceToNearest,
       isInsideGeofence: isInsideGeofence ?? this.isInsideGeofence,
-      needsProjectConfirmation: needsProjectConfirmation ?? this.needsProjectConfirmation,
+      needsProjectConfirmation:
+          needsProjectConfirmation ?? this.needsProjectConfirmation,
       selectedCheckinType: selectedCheckinType ?? this.selectedCheckinType,
       selectedProjectId: selectedProjectId ?? this.selectedProjectId,
       isSubmitting: isSubmitting ?? this.isSubmitting,

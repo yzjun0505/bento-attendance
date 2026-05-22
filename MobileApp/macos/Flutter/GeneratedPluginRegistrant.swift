@@ -12,7 +12,11 @@ import flutter_secure_storage_macos
 import gal
 import geolocator_apple
 import package_info_plus
+import path_provider_foundation
 import shared_preferences_foundation
+import sqflite_darwin
+import tencent_cloud_chat_sdk
+import tencent_rtc_sdk
 import url_launcher_macos
 import webview_flutter_wkwebview
 
@@ -24,7 +28,11 @@ func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   GalPlugin.register(with: registry.registrar(forPlugin: "GalPlugin"))
   GeolocatorPlugin.register(with: registry.registrar(forPlugin: "GeolocatorPlugin"))
   FPPPackageInfoPlusPlugin.register(with: registry.registrar(forPlugin: "FPPPackageInfoPlusPlugin"))
+  PathProviderPlugin.register(with: registry.registrar(forPlugin: "PathProviderPlugin"))
   SharedPreferencesPlugin.register(with: registry.registrar(forPlugin: "SharedPreferencesPlugin"))
+  SqflitePlugin.register(with: registry.registrar(forPlugin: "SqflitePlugin"))
+  TencentCloudChatSdkPlugin.register(with: registry.registrar(forPlugin: "TencentCloudChatSdkPlugin"))
+  TencentRTCCloud.register(with: registry.registrar(forPlugin: "TencentRTCCloud"))
   UrlLauncherPlugin.register(with: registry.registrar(forPlugin: "UrlLauncherPlugin"))
   WebViewFlutterPlugin.register(with: registry.registrar(forPlugin: "WebViewFlutterPlugin"))
 }

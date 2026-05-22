@@ -18,7 +18,8 @@ class TrackingBloc extends Bloc<TrackingEvent, TrackingState> {
     on<LocationUpdated>(_onLocationUpdated);
   }
 
-  Future<void> _onStartTracking(StartTracking event, Emitter<TrackingState> emit) async {
+  Future<void> _onStartTracking(
+      StartTracking event, Emitter<TrackingState> emit) async {
     bool serviceEnabled;
     LocationPermission permission;
 
@@ -68,7 +69,8 @@ class TrackingBloc extends Bloc<TrackingEvent, TrackingState> {
       ),
     ).listen((position) {
       debugPrint('位置流更新原始GPS: ${position.latitude}, ${position.longitude}');
-      final gcj = CoordUtils.wgs84ToGcj02(position.latitude, position.longitude);
+      final gcj =
+          CoordUtils.wgs84ToGcj02(position.latitude, position.longitude);
       final gcjPosition = Position(
         latitude: gcj['latitude']!,
         longitude: gcj['longitude']!,
@@ -93,7 +95,8 @@ class TrackingBloc extends Bloc<TrackingEvent, TrackingState> {
         forceAndroidLocationManager: true, // 强制使用 Android 原生定位
       );
       debugPrint('获取原始GPS: ${position.latitude}, ${position.longitude}');
-      final gcj = CoordUtils.wgs84ToGcj02(position.latitude, position.longitude);
+      final gcj =
+          CoordUtils.wgs84ToGcj02(position.latitude, position.longitude);
       final gcjPosition = Position(
         latitude: gcj['latitude']!,
         longitude: gcj['longitude']!,
@@ -113,10 +116,11 @@ class TrackingBloc extends Bloc<TrackingEvent, TrackingState> {
     }
   }
 
-  Future<void> _onLocationUpdated(LocationUpdated event, Emitter<TrackingState> emit) async {
+  Future<void> _onLocationUpdated(
+      LocationUpdated event, Emitter<TrackingState> emit) async {
     if (state is TrackingActive) {
       emit(TrackingActive(lastPosition: event.position));
-      
+
       // 上报到后端
       final success = await locationRepository.reportLocation(
         latitude: event.position.latitude,
@@ -130,7 +134,8 @@ class TrackingBloc extends Bloc<TrackingEvent, TrackingState> {
     }
   }
 
-  Future<void> _onStopTracking(StopTracking event, Emitter<TrackingState> emit) async {
+  Future<void> _onStopTracking(
+      StopTracking event, Emitter<TrackingState> emit) async {
     _timer?.cancel();
     _positionSubscription?.cancel();
     emit(TrackingStopped());

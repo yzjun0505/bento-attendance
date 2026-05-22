@@ -103,7 +103,8 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(BentoRadius.sm),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               ),
               child: const Text(
                 '重新登录',
@@ -158,7 +159,8 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(BentoRadius.sm),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               ),
               child: const Text(
                 '确定',
@@ -217,7 +219,8 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                         icon: Icons.lock_outline,
                         obscureText: _obscureOldPassword,
                         onToggleVisibility: () {
-                          setState(() => _obscureOldPassword = !_obscureOldPassword);
+                          setState(
+                              () => _obscureOldPassword = !_obscureOldPassword);
                         },
                         validator: (value) {
                           if (value == null || value.isEmpty) {
@@ -240,7 +243,8 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                         icon: Icons.lock_rounded,
                         obscureText: _obscureNewPassword,
                         onToggleVisibility: () {
-                          setState(() => _obscureNewPassword = !_obscureNewPassword);
+                          setState(
+                              () => _obscureNewPassword = !_obscureNewPassword);
                         },
                         validator: (value) {
                           if (value == null || value.isEmpty) {
@@ -266,7 +270,8 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                         icon: Icons.lock_rounded,
                         obscureText: _obscureConfirmPassword,
                         onToggleVisibility: () {
-                          setState(() => _obscureConfirmPassword = !_obscureConfirmPassword);
+                          setState(() => _obscureConfirmPassword =
+                              !_obscureConfirmPassword);
                         },
                         validator: (value) {
                           if (value == null || value.isEmpty) {
@@ -314,7 +319,8 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
             ),
           ],
         ),
-        child: Icon(Icons.security_rounded, size: 40, color: colors.textOnPrimary),
+        child:
+            Icon(Icons.security_rounded, size: 40, color: colors.textOnPrimary),
       ),
     );
   }
@@ -349,7 +355,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         ),
         suffixIcon: IconButton(
           icon: Icon(
-            obscureText ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+            obscureText
+                ? Icons.visibility_outlined
+                : Icons.visibility_off_outlined,
             color: colors.textSecondary.withValues(alpha: 0.6),
             size: 22,
           ),
@@ -359,7 +367,8 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           borderRadius: BorderRadius.circular(BentoRadius.md),
           borderSide: BorderSide.none,
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
         errorStyle: const TextStyle(fontSize: 12),
       ),
     );

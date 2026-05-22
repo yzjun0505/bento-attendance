@@ -169,7 +169,9 @@ class _CreateApprovalScreenState extends State<CreateApprovalScreen> {
                   margin: EdgeInsets.only(right: type == '加班' ? 0 : 12),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   decoration: BoxDecoration(
-                    color: isSelected ? color.withValues(alpha: 0.15) : colors.surface,
+                    color: isSelected
+                        ? color.withValues(alpha: 0.15)
+                        : colors.surface,
                     borderRadius: BorderRadius.circular(BentoRadius.md),
                     border: Border.all(
                       color: isSelected ? color : colors.border,
@@ -221,7 +223,8 @@ class _CreateApprovalScreenState extends State<CreateApprovalScreen> {
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.calendar_today, size: 20, color: colors.primary),
+                      Icon(Icons.calendar_today,
+                          size: 20, color: colors.primary),
                       const SizedBox(width: 12),
                       Text(
                         '${_startDate.year}-${_startDate.month.toString().padLeft(2, '0')}-${_startDate.day.toString().padLeft(2, '0')}',
@@ -252,14 +255,17 @@ class _CreateApprovalScreenState extends State<CreateApprovalScreen> {
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.calendar_today, size: 20, color: colors.success),
+                        Icon(Icons.calendar_today,
+                            size: 20, color: colors.success),
                         const SizedBox(width: 12),
                         Text(
                           _endDate != null
                               ? '${_endDate!.year}-${_endDate!.month.toString().padLeft(2, '0')}-${_endDate!.day.toString().padLeft(2, '0')}'
                               : '结束日期',
                           style: TextStyle(
-                            color: _endDate != null ? colors.textPrimary : colors.textTertiary,
+                            color: _endDate != null
+                                ? colors.textPrimary
+                                : colors.textTertiary,
                             fontSize: 15,
                           ),
                         ),

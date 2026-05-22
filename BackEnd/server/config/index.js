@@ -31,7 +31,7 @@ module.exports = {
   // JWT 配置
   jwt: {
     secret: process.env.JWT_SECRET || '',
-    expiresIn: '2h',
+    expiresIn: process.env.JWT_EXPIRES_IN || '12h',
     refreshSecret: process.env.JWT_REFRESH_SECRET || '',
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d'
   },

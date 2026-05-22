@@ -5,21 +5,28 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:tuikit_atomic_x/atomicx.dart';
 import '../../api/dio_client.dart';
 import '../../models/user_model.dart';
-import '../../services/openim_service.dart';
-import '../../services/getui_push_service.dart';
+import '../../services/tencent_im_service.dart';
+import '../../services/tuikit_config.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final ApiClient apiClient;
   final _storage = const FlutterSecureStorage();
-  final _imService = OpenIMService();
-  final _getuiService = GetuiPushService();
+  final _imService = TencentIMService();
   final _connectivity = Connectivity();
+  static const int _maxIMLoginAttempts = 3;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
   String? _pendingLogoutError;
+  Future<void>? _imLoginTask;
+  Future<void>? _imRefreshTask;
+  String? _activeIMLoginKey;
+  String? _activeIMRefreshUserID;
+  int _imLoginGeneration = 0;
+  int _imLoginAttempts = 0;
 
   AuthBloc({required this.apiClient}) : super(AuthInitial()) {
     on<AppStarted>(_onAppStarted);
@@ -92,7 +99,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   Future<void> _cacheUser(User user) async {
-    await _storage.write(key: 'user_profile_json', value: jsonEncode(_userToJson(user)));
+    await _storage.write(
+        key: 'user_profile_json', value: jsonEncode(_userToJson(user)));
   }
 
   Future<void> _clearAuthStorage() async {
@@ -105,12 +113,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     await _storage.delete(key: 'im_ws_addr');
   }
 
-  Future<void> _logoutOpenIMAndReset() async {
+  Future<void> _logoutTencentIMAndReset() async {
+    _imLoginGeneration++;
+    _imLoginAttempts = 0;
+    _activeIMLoginKey = null;
+    _activeIMRefreshUserID = null;
     try {
-      await _imService.logout();
-      debugPrint('=== OpenIM Logout Success ===');
+      await LoginStore.shared.logout();
+      debugPrint('=== 腾讯云 IM (TUIKit) Logout Success ===');
     } catch (e) {
-      debugPrint('=== OpenIM Logout Error: $e ===');
+      debugPrint('=== 腾讯云 IM Logout Error: $e ===');
     }
     _imService.reset();
   }
@@ -144,11 +156,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   Future<void> _asyncValidateProfile(String token) async {
     try {
-      final response = await apiClient.dio.get('/auth/profile').timeout(const Duration(seconds: 5));
+      final response = await apiClient.dio
+          .get('/auth/profile')
+          .timeout(const Duration(seconds: 5));
       if (response.statusCode == 200) {
         final user = User.fromJson(response.data['data']);
+        final latestToken = await _storage.read(key: 'jwt_token') ?? token;
         await _cacheUser(user);
-        add(UserUpdated(user: user));
+        add(UserUpdated(user: user, token: latestToken));
         return;
       }
 
@@ -171,22 +186,38 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
-  Future<bool> _initAndLoginIM(String userID, String imToken, {String? apiAddr, String? wsAddr}) async {
+  Future<bool> _initAndLoginIM(String userID, String userSig) async {
     try {
-      debugPrint('=== _initAndLoginIM: userID=$userID, apiAddr=$apiAddr, wsAddr=$wsAddr ===');
-      if (!_imService.isInitialized) {
-        debugPrint('=== OpenIM SDK 未初始化，开始初始化... ===');
-        await _imService.init(apiAddr: apiAddr, wsAddr: wsAddr);
-        debugPrint('=== OpenIM SDK 初始化完成 ===');
-      } else {
-        debugPrint('=== OpenIM SDK 已初始化，跳过 ===');
+      debugPrint('=== _initAndLoginIM (TUIKit LoginStore): userID=$userID ===');
+
+      final loginState = LoginStore.shared.loginState;
+      if (loginState.loginStatus == LoginStatus.logined &&
+          loginState.loginUserInfo?.userID == userID) {
+        debugPrint('=== TUIKit 已登录当前用户，跳过重复登录 ===');
+        _imService.markLoggedIn(userID);
+        return true;
       }
-      debugPrint('=== 开始 OpenIM 登录: userID=$userID ===');
-      final success = await _imService.login(userID: userID, token: imToken);
-      debugPrint('=== OpenIM Login 结果: $success ===');
-      return success;
+
+      // 通过 TUIKit 的 LoginStore 登录，这样 TUIKit 的 UI 组件
+      // （ConversationsPage、ChatPage 等）才能感知到登录状态并正常渲染
+      final result = await LoginStore.shared.login(
+        sdkAppID: kTencentIMAppId,
+        userID: userID,
+        userSig: userSig,
+      );
+
+      if (result.errorCode == 0) {
+        debugPrint('=== TUIKit LoginStore 登录成功 ===');
+        // 同步更新内部 IM 服务状态
+        _imService.markLoggedIn(userID);
+        return true;
+      } else {
+        debugPrint(
+            '=== TUIKit LoginStore 登录失败: ${result.errorCode}, ${result.errorMessage} ===');
+        return false;
+      }
     } catch (e, stackTrace) {
-      debugPrint('=== OpenIM Init/Login Error: $e ===');
+      debugPrint('=== TUIKit LoginStore Login Error: $e ===');
       debugPrint('=== StackTrace: $stackTrace ===');
       return false;
     }
@@ -196,21 +227,29 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     // 并行读取存储以加快启动速度
     final results = await Future.wait([
       _storage.read(key: 'jwt_token'),
+      _storage.read(key: 'refresh_token'),
       _storage.read(key: 'user_profile_json'),
     ]);
 
-    final token = results[0];
-    final cachedUserJson = results[1];
-    debugPrint('=== AppStarted: jwt=${token != null}，启动后将刷新 OpenIM Token ===');
+    var token = results[0];
+    final refreshToken = results[1];
+    final cachedUserJson = results[2];
+    debugPrint('=== AppStarted: jwt=${token != null}，启动后将刷新腾讯云 IM UserSig ===');
     if (token == null || token.isEmpty) {
-      emit(const AuthUnauthenticated());
-      return;
+      if (refreshToken != null && refreshToken.isNotEmpty) {
+        token = await apiClient.refreshAccessToken();
+      }
+      if (token == null || token.isEmpty) {
+        emit(const AuthUnauthenticated());
+        return;
+      }
     }
 
-    final cachedUser = _userFromJsonString(cachedUserJson) ?? _userFromJwtToken(token);
+    final cachedUser =
+        _userFromJsonString(cachedUserJson) ?? _userFromJwtToken(token);
     if (cachedUser == null) {
       await _clearAuthStorage();
-      await _logoutOpenIMAndReset();
+      await _logoutTencentIMAndReset();
       emit(const AuthUnauthenticated());
       return;
     }
@@ -224,13 +263,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       isOffline: false,
     ));
 
-    _getuiService.setAlias(cachedUser.id.toString());
     _asyncValidateProfile(token);
     await _clearIMStorage();
-    _refreshAndLoginIM(cachedUser, null);
+    _imLoginAttempts = 0;
+    unawaited(_refreshAndLoginIM(cachedUser));
   }
 
-  Future<void> _onConnectivityChanged(ConnectivityChanged event, Emitter<AuthState> emit) async {
+  Future<void> _onConnectivityChanged(
+      ConnectivityChanged event, Emitter<AuthState> emit) async {
     final currentState = state;
     if (currentState is! AuthAuthenticated) return;
 
@@ -242,11 +282,19 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
 
     try {
-      final response = await apiClient.dio.get('/auth/profile').timeout(const Duration(seconds: 5));
+      final response = await apiClient.dio
+          .get('/auth/profile')
+          .timeout(const Duration(seconds: 5));
       if (response.statusCode == 200) {
         final user = User.fromJson(response.data['data']);
+        final latestToken =
+            await _storage.read(key: 'jwt_token') ?? currentState.token;
         await _cacheUser(user);
-        emit(currentState.copyWith(user: user, isOffline: false));
+        emit(currentState.copyWith(
+          user: user,
+          token: latestToken,
+          isOffline: false,
+        ));
       }
     } on DioException catch (e) {
       if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
@@ -262,14 +310,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     if (_isStaleIMToken(currentState.imToken)) {
       await _clearIMStorage();
-      _compensateIMToken(currentState.user, currentState.token, null);
+      _compensateIMToken(currentState.user);
     } else if (currentState.imToken != null && !_imService.isLoggedIn) {
-      final imApiAddr = await _storage.read(key: 'im_api_addr');
-      final imWsAddr = await _storage.read(key: 'im_ws_addr');
-      _asyncIMLogin(currentState.user.id.toString(), currentState.imToken, apiAddr: imApiAddr, wsAddr: imWsAddr);
+      unawaited(
+          _asyncIMLogin(currentState.user.id.toString(), currentState.imToken));
     } else if (currentState.imToken == null) {
-      // 如果没有 imToken，尝试补偿获取
-      _compensateIMToken(currentState.user, currentState.token, null);
+      _compensateIMToken(currentState.user);
     }
   }
 
@@ -294,47 +340,34 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         if (refreshToken != null) {
           await _storage.write(key: 'refresh_token', value: refreshToken);
         }
-        await _storage.write(key: 'last_login_at', value: DateTime.now().millisecondsSinceEpoch.toString());
+        await _storage.write(
+            key: 'last_login_at',
+            value: DateTime.now().millisecondsSinceEpoch.toString());
         await _cacheUser(user);
         if (imToken != null) {
           await _storage.write(key: 'im_token', value: imToken);
         }
 
-        final imConfig = response.data['data']['imConfig'];
         final bool imAsync = response.data['data']['imAsync'] ?? false;
-        
-        if (imConfig != null) {
-          if (imConfig['apiAddr'] != null) {
-            await _storage.write(key: 'im_api_addr', value: imConfig['apiAddr']);
-          }
-          if (imConfig['wsAddr'] != null) {
-            await _storage.write(key: 'im_ws_addr', value: imConfig['wsAddr']);
-          }
-        }
 
-        debugPrint('=== Login successful, imToken=${imToken != null}, imAsync=$imAsync ===');
+        debugPrint(
+            '=== Login successful, tencentUserSig=${imToken != null}, imAsync=$imAsync ===');
 
-        // 核心改动：立即进入主界面
         emit(AuthAuthenticated(
           user: user,
           token: token,
           imToken: imToken,
           imInitialized: false,
-          imConnecting: false, 
+          imConnecting: false,
           isOffline: false,
         ));
 
-        _getuiService.setAlias(user.id.toString());
-        // 如果 imToken 是 null 但后端说 imAsync=true，说明后端在处理，我们之后补偿
+        _imLoginGeneration++;
+        _imLoginAttempts = 0;
         if (imToken == null && imAsync) {
-          _compensateIMToken(user, token, imConfig);
+          _compensateIMToken(user);
         } else if (imToken != null) {
-          _asyncIMLogin(
-            user.id.toString(),
-            imToken,
-            apiAddr: imConfig?['apiAddr'],
-            wsAddr: imConfig?['wsAddr'],
-          );
+          unawaited(_asyncIMLogin(user.id.toString(), imToken));
         }
       } else {
         debugPrint('=== Login failed: ${response.data} ===');
@@ -378,7 +411,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   Future<void> _onLoggedOut(LoggedOut event, Emitter<AuthState> emit) async {
     await _clearAuthStorage();
-    await _logoutOpenIMAndReset();
+    await _logoutTencentIMAndReset();
     final error = _pendingLogoutError;
     _pendingLogoutError = null;
     emit(AuthUnauthenticated(error: error));
@@ -387,76 +420,139 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   // --- 辅助辅助方法 ---
 
   /// 异步登录 IM（不阻塞 Bloc）
-  Future<void> _asyncIMLogin(String userID, String? imToken, {String? apiAddr, String? wsAddr}) async {
-    if (imToken == null) {
-      // 触发一次补偿逻辑
-      add(const ConnectivityChanged(isOnline: true));
+  Future<void> _asyncIMLogin(String userID, String? userSig) async {
+    final currentState = state;
+    if (currentState is! AuthAuthenticated ||
+        currentState.user.id.toString() != userID) {
+      debugPrint('=== 腾讯云 IM 登录任务已过期，跳过 ===');
       return;
     }
-    
-    // 延迟 500ms 启动，确保主 UI 已经加载
-    await Future.delayed(const Duration(milliseconds: 500));
-    
-    final success = await _initAndLoginIM(userID, imToken, apiAddr: apiAddr, wsAddr: wsAddr);
-    
-    add(IMLoginResult(userID: userID, success: success, imToken: imToken));
+
+    if (userSig == null || userSig.isEmpty) {
+      _compensateIMToken(currentState.user);
+      return;
+    }
+
+    final loginKey = '$userID:$userSig';
+    if (_activeIMLoginKey == loginKey && _imLoginTask != null) {
+      debugPrint('=== 腾讯云 IM 登录已在进行中，跳过重复任务 ===');
+      return _imLoginTask;
+    }
+
+    final generation = ++_imLoginGeneration;
+    _activeIMLoginKey = loginKey;
+    _imLoginTask = () async {
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      if (generation != _imLoginGeneration) return;
+
+      final success = await _initAndLoginIM(userID, userSig);
+
+      if (generation == _imLoginGeneration && !isClosed) {
+        add(IMLoginResult(userID: userID, success: success, userSig: userSig));
+      }
+    }();
+
+    try {
+      await _imLoginTask;
+    } finally {
+      if (_activeIMLoginKey == loginKey) {
+        _activeIMLoginKey = null;
+        _imLoginTask = null;
+      }
+    }
   }
 
-  Future<void> _onIMLoginResult(IMLoginResult event, Emitter<AuthState> emit) async {
+  void _compensateIMToken(User user) {
+    if (_imLoginAttempts >= _maxIMLoginAttempts) {
+      debugPrint('=== 腾讯云 IM 登录重试已达上限，停止补偿 ===');
+      return;
+    }
+
+    unawaited(_refreshAndLoginIM(user, delay: const Duration(seconds: 2)));
+  }
+
+  Future<void> _onIMLoginResult(
+      IMLoginResult event, Emitter<AuthState> emit) async {
     final currentState = state;
-    if (currentState is AuthAuthenticated && currentState.user.id.toString() == event.userID) {
+    if (currentState is AuthAuthenticated &&
+        currentState.user.id.toString() == event.userID) {
       emit(currentState.copyWith(
         imInitialized: event.success,
         imConnecting: false,
-        imToken: event.imToken,
+        imToken: event.userSig,
       ));
+      if (event.success) {
+        _imLoginAttempts = 0;
+        return;
+      }
+
       if (!event.success) {
-        debugPrint('=== OpenIM 登录失败，清理 IM Token 并尝试重新获取 ===');
+        _imLoginAttempts++;
+        debugPrint('=== 腾讯云 IM 登录失败，清理 IM Token 并尝试重新获取 ===');
         await _clearIMStorage();
-        _compensateIMToken(currentState.user, currentState.token, null);
+        _compensateIMToken(currentState.user);
       }
     }
   }
 
-  /// 补偿获取 IM Token
-  Future<void> _compensateIMToken(User user, String token, Map<String, dynamic>? imConfig) async {
-    await _refreshAndLoginIM(user, imConfig, delay: const Duration(seconds: 2));
-  }
-
   Future<void> _refreshAndLoginIM(
-    User user,
-    Map<String, dynamic>? imConfig, {
+    User user, {
     Duration delay = Duration.zero,
   }) async {
-    try {
-      debugPrint('=== 开始补偿获取 IM Token ===');
-      if (delay > Duration.zero) {
-        await Future.delayed(delay);
-      }
-      
-      final response = await apiClient.dio.get('/auth/im-token');
-      if (response.statusCode == 200) {
-        final newImToken = response.data['data']['imToken'];
-        final newImConfig = response.data['data']['imConfig'] ?? imConfig;
-        
-        if (newImToken != null) {
-          debugPrint('=== 补偿获取 IM Token 成功 ===');
-          await _storage.write(key: 'im_token', value: newImToken);
-          if (newImConfig != null) {
-            await _storage.write(key: 'im_api_addr', value: newImConfig['apiAddr']);
-            await _storage.write(key: 'im_ws_addr', value: newImConfig['wsAddr']);
-          }
-          
-          _asyncIMLogin(
-            user.id.toString(),
-            newImToken,
-            apiAddr: newImConfig?['apiAddr'],
-            wsAddr: newImConfig?['wsAddr'],
-          );
+    final userID = user.id.toString();
+    if (_activeIMRefreshUserID == userID && _imRefreshTask != null) {
+      debugPrint('=== 腾讯云 IM UserSig 补偿请求已在进行中，跳过重复任务 ===');
+      return _imRefreshTask;
+    }
+
+    _activeIMRefreshUserID = userID;
+    _imRefreshTask = () async {
+      try {
+        debugPrint('=== 开始补偿获取腾讯云 IM UserSig ===');
+        if (delay > Duration.zero) {
+          await Future.delayed(delay);
         }
+
+        final currentState = state;
+        if (currentState is! AuthAuthenticated ||
+            currentState.user.id.toString() != userID) {
+          debugPrint('=== 腾讯云 IM UserSig 补偿任务已过期，跳过 ===');
+          return;
+        }
+
+        final response = await apiClient.dio
+            .get('/auth/im-token')
+            .timeout(const Duration(seconds: 12));
+        if (response.statusCode == 200) {
+          final newUserSig = response.data['data']['imToken'];
+
+          if (newUserSig != null) {
+            final latestState = state;
+            if (latestState is! AuthAuthenticated ||
+                latestState.user.id.toString() != userID) {
+              debugPrint('=== 腾讯云 IM UserSig 已返回但用户状态已变化，跳过登录 ===');
+              return;
+            }
+
+            debugPrint('=== 补偿获取腾讯云 IM UserSig 成功 ===');
+            await _storage.write(key: 'im_token', value: newUserSig);
+
+            unawaited(_asyncIMLogin(userID, newUserSig));
+          }
+        }
+      } catch (e) {
+        debugPrint('=== 补偿获取腾讯云 IM UserSig 失败: $e ===');
       }
-    } catch (e) {
-      debugPrint('=== 补偿获取 IM Token 失败: $e ===');
+    }();
+
+    try {
+      await _imRefreshTask;
+    } finally {
+      if (_activeIMRefreshUserID == userID) {
+        _activeIMRefreshUserID = null;
+        _imRefreshTask = null;
+      }
     }
   }
 
@@ -464,7 +560,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       UserUpdated event, Emitter<AuthState> emit) async {
     final currentState = state;
     if (currentState is AuthAuthenticated) {
-      emit(currentState.copyWith(user: event.user));
+      emit(currentState.copyWith(user: event.user, token: event.token));
     }
   }
 }

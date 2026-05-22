@@ -63,6 +63,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               color: colors.primary,
               onRefresh: () async {
                 await _fetchUnreadCount();
+                if (!context.mounted) return;
                 if (!isGuest) {
                   context
                       .read<HomeBloc>()

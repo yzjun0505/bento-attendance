@@ -61,8 +61,8 @@ class BentoInput extends StatelessWidget {
           Text(
             label!,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: colors.textSecondary,
-            ),
+                  color: colors.textSecondary,
+                ),
           ),
           const SizedBox(height: BentoSpacing.space8),
         ],
@@ -80,8 +80,8 @@ class BentoInput extends StatelessWidget {
           validator: validator,
           textInputAction: textInputAction,
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-            color: colors.textPrimary,
-          ),
+                color: colors.textPrimary,
+              ),
           decoration: InputDecoration(
             hintText: hint,
             errorText: errorText,

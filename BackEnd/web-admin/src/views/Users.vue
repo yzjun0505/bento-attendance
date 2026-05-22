@@ -82,6 +82,7 @@
                 <el-button link :icon="MoreFilled" style="margin-left: 8px; color: var(--text-secondary);"></el-button>
                 <template #dropdown>
                   <el-dropdown-menu>
+                    <el-dropdown-item v-if="isAdmin && row.role === 'manager'" command="authProjects">项目授权</el-dropdown-item>
                     <el-dropdown-item command="resetPwd">重置密码</el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
@@ -147,13 +148,44 @@
         <el-button type="primary" :loading="saving" @click="handleSave">保存</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="authDialogVisible"
+      title="项目经理授权"
+      width="520px"
+      :close-on-click-modal="false"
+    >
+      <el-form label-width="90px">
+        <el-form-item label="项目经理">
+          <el-input :model-value="authorizingUser?.name || authorizingUser?.username || ''" disabled />
+        </el-form-item>
+        <el-form-item label="授权项目" required>
+          <el-select
+            v-model="selectedProjectIds"
+            multiple
+            filterable
+            placeholder="请选择项目"
+            style="width: 100%"
+            :loading="authLoading"
+          >
+            <el-option v-for="p in projectList" :key="p.id" :label="p.name" :value="p.id" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="authDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="authSaving" @click="handleSaveAuth">保存授权</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { getUsers, createUser, updateUser, deleteUser, resetPassword } from '@/api/users'
 import { getAllProjects } from '@/api/projects'
+import { getProjectManagers, bindProjectManager, unbindProjectManager } from '@/api/projectManagers'
+import { useUserStore } from '@/store/user'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search, Edit, Delete, MoreFilled } from '@element-plus/icons-vue'
 
@@ -161,11 +193,19 @@ const roleMap = { admin: '管理员', manager: '项目经理', worker: '工人' 
 
 const loading = ref(false)
 const saving = ref(false)
+const authLoading = ref(false)
+const authSaving = ref(false)
 const tableData = ref([])
 const projectList = ref([])
 const dialogVisible = ref(false)
+const authDialogVisible = ref(false)
 const editingUser = ref(null)
+const authorizingUser = ref(null)
 const dialogFormRef = ref(null)
+const authRows = ref([])
+const selectedProjectIds = ref([])
+const userStore = useUserStore()
+const isAdmin = computed(() => userStore.userInfo?.role === 'admin')
 
 const filters = reactive({ keyword: '', role: '', status: '', project_id: '' })
 const pagination = reactive({ page: 1, pageSize: 20, total: 0 })
@@ -270,6 +310,61 @@ async function handleResetPwd(row) {
 function handleCommand(command, row) {
   if (command === 'resetPwd') {
     handleResetPwd(row)
+  } else if (command === 'authProjects') {
+    openAuthDialog(row)
+  }
+}
+
+async function openAuthDialog(user) {
+  if (user.role !== 'manager') {
+    ElMessage.warning('只有项目经理可以进行项目授权')
+    return
+  }
+  authorizingUser.value = user
+  authDialogVisible.value = true
+  authLoading.value = true
+  try {
+    if (projectList.value.length === 0) {
+      await loadProjects()
+    }
+    const res = await getProjectManagers({ manager_id: user.id })
+    authRows.value = res.data || []
+    selectedProjectIds.value = authRows.value.map((item) => item.project_id)
+  } catch (e) {
+    ElMessage.error(e.response?.data?.message || '加载授权信息失败')
+  } finally {
+    authLoading.value = false
+  }
+}
+
+async function handleSaveAuth() {
+  if (!authorizingUser.value) return
+  if (selectedProjectIds.value.length === 0) {
+    ElMessage.warning('请至少选择一个授权项目')
+    return
+  }
+
+  const currentIds = new Set(authRows.value.map((item) => item.project_id))
+  const nextIds = new Set(selectedProjectIds.value)
+  const additions = selectedProjectIds.value.filter((id) => !currentIds.has(id))
+  const removals = authRows.value.filter((item) => !nextIds.has(item.project_id))
+
+  authSaving.value = true
+  try {
+    await Promise.all([
+      ...additions.map((projectId) => bindProjectManager({
+        manager_id: authorizingUser.value.id,
+        project_id: projectId
+      })),
+      ...removals.map((item) => unbindProjectManager(item.id))
+    ])
+    ElMessage.success('项目授权已更新')
+    authDialogVisible.value = false
+    await loadData()
+  } catch (e) {
+    ElMessage.error(e.response?.data?.message || e.message || '保存授权失败')
+  } finally {
+    authSaving.value = false
   }
 }
 </script>

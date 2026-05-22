@@ -44,6 +44,17 @@ async function getProjects(req, res) {
         [project.id]
       );
       project.user_count = userCount[0].count;
+
+      const [managerRows] = await db.execute(
+        `SELECT u.id, u.name, u.username
+         FROM project_managers pm
+         INNER JOIN users u ON pm.manager_id = u.id
+         WHERE pm.project_id = ? AND u.status = 1
+         ORDER BY u.name, u.username`,
+        [project.id]
+      );
+      project.manager_count = managerRows.length;
+      project.managers = managerRows;
     }
 
     res.json(successResponse({
@@ -240,4 +251,82 @@ function calculateDistance(lat1, lng1, lat2, lng2) {
   return R * c;
 }
 
-module.exports = { getProjects, getProjectById, createProject, updateProject, deleteProject, getAllProjects, getNearbyProjects };
+async function getAuthorizedProjects(req, res) {
+  try {
+    const db = getPool();
+    const userId = req.user.id;
+    const role = req.user.role;
+
+    let projects;
+    if (role === 'admin') {
+      const [rows] = await db.query('SELECT id, name, address, status FROM projects ORDER BY name');
+      projects = rows;
+    } else if (role === 'manager') {
+      const [rows] = await db.query(`
+        SELECT p.id, p.name, p.address, p.status
+        FROM projects p
+        INNER JOIN project_managers pm ON p.id = pm.project_id
+        WHERE pm.manager_id = ?
+        ORDER BY p.name
+      `, [userId]);
+      projects = rows;
+    } else {
+      const [userRows] = await db.query('SELECT project_id FROM users WHERE id = ?', [userId]);
+      if (!userRows.length || !userRows[0].project_id) {
+        return res.json(successResponse({ projects: [] }));
+      }
+      const [rows] = await db.query(
+        'SELECT id, name, address, status FROM projects WHERE id = ?',
+        [userRows[0].project_id]
+      );
+      projects = rows;
+    }
+
+    const result = [];
+    for (const project of projects) {
+      const [[stats]] = await db.query(`
+        SELECT
+          COUNT(*) as totalNodes,
+          SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completedNodes,
+          SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as inProgressNodes,
+          SUM(CASE WHEN plan_end_date < CURDATE() AND status != 'completed' THEN 1 ELSE 0 END) as overdueNodes,
+          SUM(CASE WHEN status = 'paused' THEN 1 ELSE 0 END) as pausedNodes,
+          ROUND(AVG(progress_percent), 1) as overallProgress
+        FROM task_nodes
+        WHERE project_id = ?
+      `, [project.id]);
+
+      const [[lastReport]] = await db.query(`
+        SELECT MAX(created_at) as lastTime
+        FROM progress_reports pr
+        INNER JOIN task_nodes tn ON pr.node_id = tn.id
+        WHERE tn.project_id = ?
+      `, [project.id]);
+
+      const [[assignee]] = await db.query(`
+        SELECT COUNT(DISTINCT assignee_id) as count
+        FROM task_nodes
+        WHERE project_id = ? AND assignee_id IS NOT NULL
+      `, [project.id]);
+
+      result.push({
+        ...project,
+        totalNodes: stats.totalNodes || 0,
+        completedNodes: stats.completedNodes || 0,
+        inProgressNodes: stats.inProgressNodes || 0,
+        overdueNodes: stats.overdueNodes || 0,
+        pausedNodes: stats.pausedNodes || 0,
+        overallProgress: Math.round(stats.overallProgress || 0),
+        lastReportTime: lastReport.lastTime || null,
+        assigneeCount: assignee.count || 0,
+      });
+    }
+
+    res.json(successResponse({ projects: result }));
+  } catch (err) {
+    console.error('获取授权项目列表失败:', err);
+    res.status(500).json(errorResponse('服务器错误'));
+  }
+}
+
+module.exports = { getProjects, getProjectById, createProject, updateProject, deleteProject, getAllProjects, getNearbyProjects, getAuthorizedProjects };

@@ -86,7 +86,10 @@ class BentoListTile extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           content,
-          Divider(height: 1, color: colors.divider, indent: leading != null ? 56 : 0),
+          Divider(
+              height: 1,
+              color: colors.divider,
+              indent: leading != null ? 56 : 0),
         ],
       );
     }

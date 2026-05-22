@@ -5,38 +5,38 @@ import 'package:flutter/material.dart';
 /// 使用方式：Theme.of(context).extension<BentoColors>()!.background
 class BentoColors extends ThemeExtension<BentoColors> {
   // --- 背景 ---
-  final Color background;       // 页面底色
-  final Color surface;          // 卡片/容器底色
-  final Color surfaceVariant;   // 次级表面（输入框底色等）
+  final Color background; // 页面底色
+  final Color surface; // 卡片/容器底色
+  final Color surfaceVariant; // 次级表面（输入框底色等）
 
   // --- 文字 ---
-  final Color textPrimary;      // 主文字（标题/正文）
-  final Color textSecondary;    // 辅助文字（描述/时间）
-  final Color textTertiary;     // 弱化文字（提示/占位）
-  final Color textOnPrimary;    // 主色上的文字（白色）
+  final Color textPrimary; // 主文字（标题/正文）
+  final Color textSecondary; // 辅助文字（描述/时间）
+  final Color textTertiary; // 弱化文字（提示/占位）
+  final Color textOnPrimary; // 主色上的文字（白色）
 
   // --- 语义色 ---
-  final Color primary;          // 主色（蓝）
-  final Color primaryLight;     // 主色浅底（用于 Badge 背景）
-  final Color primaryVariant;   // 主色变体
-  final Color secondary;        // 次要色（紫）
-  final Color secondaryLight;   // 次要色浅底
-  final Color success;          // 成功（绿）
-  final Color successLight;     // 成功浅底
-  final Color warning;          // 警告（橙）
-  final Color warningLight;     // 警告浅底
-  final Color error;            // 错误（红）
-  final Color errorLight;       // 错误浅底
-  final Color info;             // 信息（青）
-  final Color shadow;           // 阴影色
+  final Color primary; // 主色（蓝）
+  final Color primaryLight; // 主色浅底（用于 Badge 背景）
+  final Color primaryVariant; // 主色变体
+  final Color secondary; // 次要色（紫）
+  final Color secondaryLight; // 次要色浅底
+  final Color success; // 成功（绿）
+  final Color successLight; // 成功浅底
+  final Color warning; // 警告（橙）
+  final Color warningLight; // 警告浅底
+  final Color error; // 错误（红）
+  final Color errorLight; // 错误浅底
+  final Color info; // 信息（青）
+  final Color shadow; // 阴影色
 
   // --- 边框/分割 ---
-  final Color border;           // 卡片/输入框边框
-  final Color divider;          // 列表分割线
+  final Color border; // 卡片/输入框边框
+  final Color divider; // 列表分割线
 
   // --- 导航栏 ---
-  final Color navBarBg;         // 底部导航栏背景
-  final Color navBarBorder;     // 底部导航栏上边框
+  final Color navBarBg; // 底部导航栏背景
+  final Color navBarBorder; // 底部导航栏上边框
 
   // --- 渐变 ---
   final LinearGradient primaryGradient;
@@ -220,7 +220,8 @@ class BentoColors extends ThemeExtension<BentoColors> {
       divider: Color.lerp(divider, other.divider, t)!,
       navBarBg: Color.lerp(navBarBg, other.navBarBg, t)!,
       navBarBorder: Color.lerp(navBarBorder, other.navBarBorder, t)!,
-      primaryGradient: LinearGradient.lerp(primaryGradient, other.primaryGradient, t)!,
+      primaryGradient:
+          LinearGradient.lerp(primaryGradient, other.primaryGradient, t)!,
     );
   }
 }

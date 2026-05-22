@@ -19,14 +19,16 @@ class ThemeBloc extends Bloc<ThemeEvent, ThemeState> {
     }
   }
 
-  Future<void> _onToggleTheme(ToggleTheme event, Emitter<ThemeState> emit) async {
+  Future<void> _onToggleTheme(
+      ToggleTheme event, Emitter<ThemeState> emit) async {
     final newIsDarkMode = !state.isDarkMode;
     await _storage.write(key: 'is_dark_mode', value: newIsDarkMode.toString());
     emit(state.copyWith(isDarkMode: newIsDarkMode));
   }
 
   Future<void> _onSetTheme(SetTheme event, Emitter<ThemeState> emit) async {
-    await _storage.write(key: 'is_dark_mode', value: event.isDarkMode.toString());
+    await _storage.write(
+        key: 'is_dark_mode', value: event.isDarkMode.toString());
     emit(state.copyWith(isDarkMode: event.isDarkMode));
   }
 }

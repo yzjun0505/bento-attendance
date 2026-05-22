@@ -133,6 +133,19 @@ async function initDatabase() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
+  // 创建项目-项目经理授权关系表
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS project_managers (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      manager_id INT NOT NULL,
+      project_id INT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY unique_manager_project (manager_id, project_id),
+      FOREIGN KEY (manager_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
   // 创建打卡记录表
   await db.execute(`
     CREATE TABLE IF NOT EXISTS checkins (
@@ -680,6 +693,75 @@ async function initDatabase() {
       INDEX idx_action_type (action_type)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
+
+  // 创建任务节点表
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS task_nodes (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      project_id INT NOT NULL,
+      title VARCHAR(255) NOT NULL,
+      description TEXT,
+      planned_date DATE,
+      assignee_id INT,
+      status ENUM('pending','in_progress','completed','paused') DEFAULT 'pending',
+      progress_percent INT DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (assignee_id) REFERENCES users(id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  // 迁移：为 task_nodes 添加增强字段
+  const taskNodeMigrations = [
+    { col: 'phase', sql: "ALTER TABLE task_nodes ADD COLUMN phase ENUM('preparation','construction','inspection','rectification','delivery') DEFAULT 'construction'" },
+    { col: 'plan_start_date', sql: 'ALTER TABLE task_nodes ADD COLUMN plan_start_date DATE' },
+    { col: 'plan_end_date', sql: 'ALTER TABLE task_nodes ADD COLUMN plan_end_date DATE' },
+    { col: 'priority', sql: "ALTER TABLE task_nodes ADD COLUMN priority ENUM('low','medium','high','urgent') DEFAULT 'medium'" },
+    { col: 'sort_order', sql: 'ALTER TABLE task_nodes ADD COLUMN sort_order INT DEFAULT 0' },
+  ];
+  for (const m of taskNodeMigrations) {
+    try {
+      await db.execute(m.sql);
+      logger.info(`已迁移 task_nodes 表：添加 ${m.col} 字段`);
+    } catch (e) {
+      if (e.code !== 'ER_DUP_FIELDNAME') {
+        logger.error(`迁移 task_nodes 表 ${m.col} 字段失败`, { error: e.message });
+      }
+    }
+  }
+
+  // 创建进度上报记录表
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS progress_reports (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      node_id INT NOT NULL,
+      reporter_id INT NOT NULL,
+      description TEXT,
+      photo VARCHAR(500),
+      progress_percent INT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (node_id) REFERENCES task_nodes(id) ON DELETE CASCADE,
+      FOREIGN KEY (reporter_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  // 迁移：为 progress_reports 添加增强字段
+  const reportMigrations = [
+    { col: 'risk_note', sql: 'ALTER TABLE progress_reports ADD COLUMN risk_note TEXT' },
+    { col: 'blocker_note', sql: 'ALTER TABLE progress_reports ADD COLUMN blocker_note TEXT' },
+    { col: 'photos', sql: 'ALTER TABLE progress_reports ADD COLUMN photos JSON' },
+  ];
+  for (const m of reportMigrations) {
+    try {
+      await db.execute(m.sql);
+      logger.info(`已迁移 progress_reports 表：添加 ${m.col} 字段`);
+    } catch (e) {
+      if (e.code !== 'ER_DUP_FIELDNAME') {
+        logger.error(`迁移 progress_reports 表 ${m.col} 字段失败`, { error: e.message });
+      }
+    }
+  }
 
   // 初始水印模板
   const [wmRows] = await db.execute('SELECT count(*) as count FROM watermark_templates');

@@ -75,7 +75,17 @@ class HomeSummaryLoaded extends HomeState {
   });
 
   @override
-  List<Object?> get props => [user, lastCheckinIn, lastCheckinOut, totalCheckinsThisMonth, weatherInfo, timelineItems, workStartTime, workEndTime, attendanceGroupName];
+  List<Object?> get props => [
+        user,
+        lastCheckinIn,
+        lastCheckinOut,
+        totalCheckinsThisMonth,
+        weatherInfo,
+        timelineItems,
+        workStartTime,
+        workEndTime,
+        attendanceGroupName
+      ];
 }
 
 class HomeError extends HomeState {

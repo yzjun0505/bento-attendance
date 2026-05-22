@@ -26,25 +26,22 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        manifestPlaceholders["GETUI_APPID"] = (project.findProperty("GETUI_APPID") ?: "").toString()
     }
 
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("debug")
-        }
-    }
-
-    externalNativeBuild {
-        cmake {
-            version = "3.31.6"
+            // 关闭 R8 代码压缩：腾讯 IM/TRTC SDK 体量过大，
+            // R8 全量分析会导致打包耗时 10+ 分钟甚至卡死。
+            // 腾讯 SDK 已自带预优化，无需再做 R8 压缩。
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
-    implementation("com.getui:gtsdk:3.3.7.0")
 }
 
 flutter {

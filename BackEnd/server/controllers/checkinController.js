@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const ExcelJS = require('exceljs');
 const { getPool } = require('../models/db');
 const { successResponse, errorResponse, parsePagination, getTodayRange } = require('../utils/helpers');
+const { getAccessibleUserIds } = require('../middleware/authScope');
 const checkinService = require('../services/checkinService');
 const { getTypeName } = checkinService;
 
@@ -77,11 +78,12 @@ async function getCheckins(req, res) {
       params.push(parseInt(is_outside));
     }
 
-    // 非管理员只能看自己的
-    if (req.user.role === 'worker') {
-      where += ' AND c.user_id = ?';
-      params.push(req.user.id);
-    }
+    const { scope } = req.query;
+    const accessibleUserIds = await getAccessibleUserIds(req);
+    const targetUserIds = scope === 'team' ? accessibleUserIds : [req.user.id];
+    const placeholders = targetUserIds.map(() => '?').join(',');
+    where += ` AND c.user_id IN (${placeholders})`;
+    params.push(...targetUserIds);
 
     const [countRows] = await db.execute(
       `SELECT COUNT(*) as total FROM checkins c ${where}`,
@@ -102,43 +104,67 @@ async function getCheckins(req, res) {
       params
     );
 
-    // Calculate attendance status for display
     const list = rows.map(row => {
-      let status = 'normal';
+      let rawStatus = 'normal';
+      let attendanceStatus = 'normal';
       let expectedTime = null;
-      
-      if (row.created_at && row.work_start_time) {
+
+      if (row.created_at) {
         const checkinTime = new Date(row.created_at);
-        const timeStr = checkinTime.toTimeString().substring(0, 8); // HH:MM:SS
-        
+
         if (row.type === 'clock_in' || row.type === 'in') {
-          expectedTime = row.work_start_time;
-          
-          // Calculate if late
-          const [h, m, s] = row.work_start_time.split(':').map(Number);
-          const startLimit = new Date(checkinTime);
-          startLimit.setHours(h, m + (row.late_tolerance || 0), s || 0);
-          
-          if (checkinTime > startLimit) {
-            status = 'late';
+          if (row.work_start_time) {
+            expectedTime = row.work_start_time;
+            const [h, m, s] = row.work_start_time.split(':').map(Number);
+
+            const rawLimit = new Date(checkinTime);
+            rawLimit.setHours(h, m, s || 0);
+
+            if (checkinTime > rawLimit) {
+              rawStatus = 'late';
+            }
+
+            if (rawStatus === 'late' && row.late_tolerance != null) {
+              const tolerantLimit = new Date(checkinTime);
+              tolerantLimit.setHours(h, m + row.late_tolerance, s || 0);
+              attendanceStatus = checkinTime > tolerantLimit ? 'late' : 'normal';
+            } else {
+              attendanceStatus = rawStatus;
+            }
+          } else {
+            rawStatus = null;
+            attendanceStatus = null;
           }
         } else if (row.type === 'clock_out' || row.type === 'out') {
-          expectedTime = row.work_end_time;
-          
-          // Calculate if early leave
-          const [h, m, s] = row.work_end_time.split(':').map(Number);
-          const endLimit = new Date(checkinTime);
-          endLimit.setHours(h, m - (row.early_leave_tolerance || 0), s || 0);
-          
-          if (checkinTime < endLimit) {
-            status = 'early';
+          if (row.work_end_time) {
+            expectedTime = row.work_end_time;
+            const [h, m, s] = row.work_end_time.split(':').map(Number);
+
+            const rawLimit = new Date(checkinTime);
+            rawLimit.setHours(h, m, s || 0);
+
+            if (checkinTime < rawLimit) {
+              rawStatus = 'early';
+            }
+
+            if (rawStatus === 'early' && row.early_leave_tolerance != null) {
+              const tolerantLimit = new Date(checkinTime);
+              tolerantLimit.setHours(h, m - row.early_leave_tolerance, s || 0);
+              attendanceStatus = checkinTime < tolerantLimit ? 'early' : 'normal';
+            } else {
+              attendanceStatus = rawStatus;
+            }
+          } else {
+            rawStatus = null;
+            attendanceStatus = null;
           }
         }
       }
-      
+
       return {
         ...row,
-        attendance_status: status,
+        raw_status: rawStatus,
+        attendance_status: attendanceStatus,
         expected_time: expectedTime
       };
     });
@@ -295,10 +321,12 @@ async function exportCheckins(req, res) {
       params.push(parseInt(is_outside));
     }
 
-    if (req.user.role === 'worker') {
-      where += ' AND c.user_id = ?';
-      params.push(req.user.id);
-    }
+    const { scope } = req.query;
+    const accessibleUserIds = await getAccessibleUserIds(req);
+    const targetUserIds = scope === 'team' ? accessibleUserIds : [req.user.id];
+    const placeholders = targetUserIds.map(() => '?').join(',');
+    where += ` AND c.user_id IN (${placeholders})`;
+    params.push(...targetUserIds);
 
     const [rows] = await db.query(
       `SELECT c.*, c.watermark_code, u.name as user_name, u.username, p.name as project_name,

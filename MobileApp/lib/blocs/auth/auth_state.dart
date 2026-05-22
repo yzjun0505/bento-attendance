@@ -48,7 +48,8 @@ class AuthAuthenticated extends AuthState {
   }
 
   @override
-  List<Object?> get props => [user, token, imToken, imInitialized, imConnecting, isOffline];
+  List<Object?> get props =>
+      [user, token, imToken, imInitialized, imConnecting, isOffline];
 }
 
 class AuthUnauthenticated extends AuthState {

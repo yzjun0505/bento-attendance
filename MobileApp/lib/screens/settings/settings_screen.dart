@@ -12,7 +12,6 @@ import '../../core/bento_typography.dart';
 import '../../repositories/app_update_repository.dart';
 import '../../widgets/app_update_dialog.dart';
 import '../../widgets/bento_card.dart';
-import 'environment_diagnostics_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -58,8 +57,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _buildThemeSection(context, state, colors),
                 const SizedBox(height: 20),
                 _buildChatSection(context, colors),
-                const SizedBox(height: 20),
-                _buildEnvironmentSection(context, colors),
                 const SizedBox(height: 20),
                 _buildAboutSection(context, colors),
               ],
@@ -176,56 +173,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildEnvironmentSection(BuildContext context, BentoColors colors) {
-    return BentoCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '环境',
-            style: TextStyle(
-              color: colors.textPrimary,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Container(
-            decoration: BoxDecoration(
-              color: colors.surfaceVariant,
-              borderRadius: BorderRadius.circular(BentoRadius.sm),
-            ),
-            child: ListTile(
-              leading: Icon(Icons.network_check, color: colors.primary),
-              title: Text(
-                '服务诊断',
-                style: TextStyle(
-                  color: colors.textPrimary,
-                  fontSize: 16,
-                ),
-              ),
-              subtitle: Text(
-                'API、OpenIM 与当前地址',
-                style: TextStyle(
-                  color: colors.textSecondary,
-                  fontSize: 14,
-                ),
-              ),
-              trailing: Icon(Icons.chevron_right, color: colors.textTertiary),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => const EnvironmentDiagnosticsScreen()),
-                );
-              },
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -353,5 +300,4 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     }
   }
-
 }

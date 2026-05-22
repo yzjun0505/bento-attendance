@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/bento_colors.dart';
 
-
 /// BentoBadge — 状态标签/角标
 ///
 /// 类型：

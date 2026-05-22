@@ -223,7 +223,8 @@ class WatermarkSlot {
     return null;
   }
 
-  factory WatermarkSlot.fromJson(String id, Map<String, dynamic> json, String? label) {
+  factory WatermarkSlot.fromJson(
+      String id, Map<String, dynamic> json, String? label) {
     return WatermarkSlot(
       id: id,
       label: label ?? '',
@@ -390,7 +391,8 @@ class WatermarkTemplate {
 
   factory WatermarkTemplate.fromJson(Map<String, dynamic> json) {
     final schema = json['schema'] ?? json['schema_json'] ?? {};
-    final schemaMap = schema is Map<String, dynamic> ? schema : <String, dynamic>{};
+    final schemaMap =
+        schema is Map<String, dynamic> ? schema : <String, dynamic>{};
     final slots = schemaMap['slots'] as Map<String, dynamic>? ?? {};
     final customSlots = schemaMap['customSlots'] as List<dynamic>? ?? [];
 
@@ -467,8 +469,10 @@ class WatermarkTemplate {
       fields: extractedFields,
       opacity: (json['opacity'] ?? 0.8).toDouble(),
       fontSize: (json['fontSize'] ?? 14.0).toDouble(),
-      skeletonPreset: schemaMap['skeletonPreset'] ?? json['skeletonPreset'] ?? 'default',
-      schemaJson: schemaMap.isNotEmpty ? Map<String, dynamic>.from(schemaMap) : null,
+      skeletonPreset:
+          schemaMap['skeletonPreset'] ?? json['skeletonPreset'] ?? 'default',
+      schemaJson:
+          schemaMap.isNotEmpty ? Map<String, dynamic>.from(schemaMap) : null,
       titleSlot: titleSlot,
       subtitleSlot: subtitleSlot,
       contentSlots: contentSlots,
@@ -528,13 +532,15 @@ class WatermarkTemplate {
     WatermarkSlot? subtitleSlot;
     if (json['subtitleSlot'] != null) {
       final ss = json['subtitleSlot'] as Map<String, dynamic>;
-      subtitleSlot = WatermarkSlot.fromJson(ss['id'] ?? 'subtitle', ss, ss['label']);
+      subtitleSlot =
+          WatermarkSlot.fromJson(ss['id'] ?? 'subtitle', ss, ss['label']);
     }
 
     List<WatermarkSlot> contentSlots = [];
     if (json['contentSlots'] != null) {
       contentSlots = (json['contentSlots'] as List<dynamic>)
-          .map((s) => WatermarkSlot.fromJson(s['id'] ?? '', s as Map<String, dynamic>, s['label']))
+          .map((s) => WatermarkSlot.fromJson(
+              s['id'] ?? '', s as Map<String, dynamic>, s['label']))
           .toList();
     }
 

@@ -7,7 +7,8 @@ class ApprovalRepository {
   Future<List<Map<String, dynamic>>> getMyApprovals({String? token}) async {
     try {
       final response = await _dio.get('/approvals/mine');
-      return List<Map<String, dynamic>>.from(response.data['data']?['list'] ?? []);
+      return List<Map<String, dynamic>>.from(
+          response.data['data']?['list'] ?? []);
     } catch (e) {
       rethrow;
     }
@@ -16,16 +17,19 @@ class ApprovalRepository {
   Future<List<Map<String, dynamic>>> getAllApprovals({String? token}) async {
     try {
       final response = await _dio.get('/approvals/all');
-      return List<Map<String, dynamic>>.from(response.data['data']?['list'] ?? []);
+      return List<Map<String, dynamic>>.from(
+          response.data['data']?['list'] ?? []);
     } catch (e) {
       rethrow;
     }
   }
 
-  Future<List<Map<String, dynamic>>> getPendingApprovals({String? token}) async {
+  Future<List<Map<String, dynamic>>> getPendingApprovals(
+      {String? token}) async {
     try {
       final response = await _dio.get('/approvals/pending');
-      return List<Map<String, dynamic>>.from(response.data['data']?['list'] ?? []);
+      return List<Map<String, dynamic>>.from(
+          response.data['data']?['list'] ?? []);
     } catch (e) {
       rethrow;
     }

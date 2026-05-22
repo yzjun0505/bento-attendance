@@ -116,14 +116,16 @@ class ChatCacheRepository {
     final existing = await readDeletedIds(conversationId);
     existing.add(id);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_deletedKey(conversationId), jsonEncode(existing.toList()));
+    await prefs.setString(
+        _deletedKey(conversationId), jsonEncode(existing.toList()));
   }
 
   Future<void> removeDeletedId(String conversationId, String id) async {
     final existing = await readDeletedIds(conversationId);
     existing.remove(id);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_deletedKey(conversationId), jsonEncode(existing.toList()));
+    await prefs.setString(
+        _deletedKey(conversationId), jsonEncode(existing.toList()));
   }
 
   Future<void> clear(String conversationId) async {

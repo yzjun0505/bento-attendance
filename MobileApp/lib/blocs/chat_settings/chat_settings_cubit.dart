@@ -22,4 +22,3 @@ class ChatSettingsCubit extends Cubit<ChatSettingsState> {
     await prefs.setBool(storageKeyUse24Hour, value);
   }
 }
-

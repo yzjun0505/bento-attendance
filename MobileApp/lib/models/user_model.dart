@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import '../api/dio_client.dart';
 
 class User extends Equatable {
   final int id;
@@ -31,7 +32,7 @@ class User extends Equatable {
       role: json['role'],
       phone: json['phone'],
       email: json['email'],
-      avatar: json['avatar'],
+      avatar: ApiClient.resolveFileUrl(json['avatar']?.toString()),
       projectId: json['project_id'],
       projectName: json['project_name'],
     );
@@ -62,5 +63,6 @@ class User extends Equatable {
   }
 
   @override
-  List<Object?> get props => [id, username, name, role, phone, email, avatar, projectId, projectName];
+  List<Object?> get props =>
+      [id, username, name, role, phone, email, avatar, projectId, projectName];
 }

@@ -11,7 +11,7 @@ import '../../models/chat_quote_codec.dart';
 import '../../repositories/chat_cache_repository.dart';
 import '../../repositories/contact_remark_repository.dart';
 import '../../widgets/bento_widgets.dart';
-import '../../services/openim_service.dart' as im_service;
+import '../../services/tencent_im_service.dart' as im_service;
 
 class ChatScreen extends StatefulWidget {
   final String conversationId;
@@ -37,7 +37,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
-  final _imService = im_service.OpenIMService();
+  final _imService = im_service.TencentIMService();
   final _cacheRepo = ChatCacheRepository();
   final _remarkRepo = ContactRemarkRepository();
   String? _remarkName;
@@ -86,7 +86,9 @@ class _ChatScreenState extends State<ChatScreen> {
     _focusNode.addListener(_handleFocusChange);
   }
 
-  String _remarkKey() => widget.isGroup ? 'g_${widget.receiverId ?? ''}' : 'u_${widget.receiverId ?? ''}';
+  String _remarkKey() => widget.isGroup
+      ? 'g_${widget.receiverId ?? ''}'
+      : 'u_${widget.receiverId ?? ''}';
 
   Future<void> _loadRemark() async {
     final v = await _remarkRepo.getRemark(_remarkKey());
@@ -107,10 +109,16 @@ class _ChatScreenState extends State<ChatScreen> {
         return AlertDialog(
           backgroundColor: colors.surface,
           title: const Text('设置备注'),
-          content: TextField(controller: controller, decoration: const InputDecoration(hintText: '请输入备注')),
+          content: TextField(
+              controller: controller,
+              decoration: const InputDecoration(hintText: '请输入备注')),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('保存')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('取消')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('保存')),
           ],
         );
       },
@@ -210,7 +218,7 @@ class _ChatScreenState extends State<ChatScreen> {
       // 判断是否是当前会话的消息
       // sessionType: 1=单聊(C2C), 2=群聊(Group), 3=通知
       final isCurrentConv = !widget.isGroup
-          ? (msg.sendID == widget.receiverId || msg.recvID == widget.receiverId)
+          ? (msg.sender == widget.receiverId || msg.userID == widget.receiverId)
           : msg.groupID == widget.receiverId;
       if (isCurrentConv) {
         final rawText = _extractRawTextFromRemote(msg);
@@ -221,7 +229,7 @@ class _ChatScreenState extends State<ChatScreen> {
           rawText: rawText,
         );
         if (_deletedIds.contains(incoming.id)) return;
-        final id = msg.clientMsgID ?? '';
+        final id = msg.msgID ?? '';
         setState(() {
           final existingIndex =
               id.isEmpty ? -1 : _messages.indexWhere((m) => m.id == id);
@@ -321,7 +329,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _scrollToBottom();
       await _writeCacheNow();
     } catch (e) {
-      print('加载消息失败: $e');
+      debugPrint('加载消息失败: $e');
       if (mounted && _messages.isEmpty) {
         setState(() => _isLoading = false);
       }
@@ -476,7 +484,9 @@ class _ChatScreenState extends State<ChatScreen> {
         ],
       );
     }
-    final displayName = (_remarkName != null && _remarkName!.trim().isNotEmpty) ? _remarkName!.trim() : widget.name;
+    final displayName = (_remarkName != null && _remarkName!.trim().isNotEmpty)
+        ? _remarkName!.trim()
+        : widget.name;
     return AppBar(
       backgroundColor: colors.surface,
       elevation: 0,
@@ -493,7 +503,8 @@ class _ChatScreenState extends State<ChatScreen> {
               size: 36,
               imageUrl: _customAvatar ?? widget.faceUrl,
               text: displayName,
-              backgroundColor: widget.isGroup ? colors.secondaryLight : colors.primaryLight,
+              backgroundColor:
+                  widget.isGroup ? colors.secondaryLight : colors.primaryLight,
               textColor: widget.isGroup ? colors.secondary : colors.primary,
             ),
             const SizedBox(width: BentoSpacing.space8),
@@ -538,7 +549,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     if (!_imService.isInitialized && _messages.isEmpty) {
-      return BentoEmptyState(
+      return const BentoEmptyState(
         icon: Icons.chat_bubble_outline,
         title: 'IM 未初始化',
         description: '请稍候再试',
@@ -546,7 +557,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     if (_messages.isEmpty) {
-      return BentoEmptyState(
+      return const BentoEmptyState(
         icon: Icons.chat_outlined,
         title: '暂无消息',
         description: '发送第一条消息开始聊天',
@@ -1141,7 +1152,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _markSendSucceeded(String localId, dynamic msg) {
-    final id = msg.clientMsgID ?? localId;
+    final id = msg.msgID ?? localId;
     _cancelSendTimeout(localId);
     _cancelSendTimeout(id);
     _sendRetryTimers.remove(localId)?.cancel();
@@ -1334,7 +1345,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       );
                       if (!context.mounted) return;
                       Navigator.pop(context);
-                      ScaffoldMessenger.of(this.context)
+                      ScaffoldMessenger.of(context)
                           .showSnackBar(const SnackBar(content: Text('已转发')));
                     },
                   );
@@ -1593,9 +1604,10 @@ class _ChatListItem {
     required String digest,
     required String? rawText,
   }) {
-    final rawId = (message.clientMsgID as String?) ?? '';
-    final sendTime = message.sendTime as int?;
-    final sendID = message.sendID as String?;
+    final rawId = (message.msgID as String?) ?? '';
+    final sendTime =
+        message.timestamp != null ? (message.timestamp as int) * 1000 : null;
+    final sendID = message.sender as String?;
     final effectiveRaw =
         (rawText != null && rawText.isNotEmpty) ? rawText : digest;
     final decoded = decodeChatQuote(effectiveRaw);
@@ -1610,7 +1622,7 @@ class _ChatListItem {
       quoteSenderNickname: decoded.quoteSenderNickname,
       quoteText: decoded.quoteText,
       sendID: sendID,
-      senderNickname: message.senderNickname as String?,
+      senderNickname: message.nickName as String?,
       sendTime: sendTime,
       status: status,
     );

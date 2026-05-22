@@ -411,11 +411,6 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
     }
   }
 
-  /// 本地计算附近项目（API 不可用时的回退方案）
-  List<Project> _findNearbyProjectsLocal(Position pos, List<Project> projects) {
-    return _findNearbyProjectsFromCoords(pos.latitude, pos.longitude, projects);
-  }
-
   List<Project> _findNearbyProjectsFromCoords(
       double lat, double lng, List<Project> projects) {
     final nearby = <Project>[];
@@ -440,13 +435,5 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
     }
     nearby.sort((a, b) => (a.distance ?? 0).compareTo(b.distance ?? 0));
     return nearby;
-  }
-
-  double? _calcDistance(Position pos, Project project) {
-    if (project.latitude != null && project.longitude != null) {
-      return Geolocator.distanceBetween(
-          pos.latitude, pos.longitude, project.latitude!, project.longitude!);
-    }
-    return null;
   }
 }

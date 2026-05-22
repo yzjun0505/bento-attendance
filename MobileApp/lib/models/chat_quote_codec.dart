@@ -81,4 +81,3 @@ ChatQuoteDecoded decodeChatQuote(String rawText) {
 
   return ChatQuoteDecoded(bodyText: rawText);
 }
-

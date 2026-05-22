@@ -4,7 +4,22 @@
 const bcrypt = require('bcryptjs');
 const { getPool } = require('../models/db');
 const { successResponse, errorResponse, parsePagination } = require('../utils/helpers');
-const openIMService = require('../services/openimService');
+const tencentIMService = require('../services/tencentImService');
+
+function getPublicBaseUrl(req) {
+  const configured = process.env.PUBLIC_BASE_URL || process.env.APP_PUBLIC_URL || '';
+  if (configured) return configured.replace(/\/+$/, '');
+  return `${req.protocol}://${req.get('host')}`;
+}
+
+function toPublicUrl(req, value) {
+  if (!value) return '';
+  const raw = String(value).trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const path = raw.startsWith('/') ? raw : `/${raw}`;
+  return `${getPublicBaseUrl(req)}${path}`;
+}
 
 /**
  * 获取用户列表
@@ -109,25 +124,26 @@ async function createUser(req, res) {
       [username, hashedPassword, name || '', role || 'worker', phone || '', project_id || null]
     );
 
-    // 异步同步到 OpenIM
+    // 异步同步到腾讯云 IM
     (async () => {
       try {
         const userId = result.insertId;
-        console.log(`创建用户后同步到 OpenIM [用户ID: ${userId}]`);
+        console.log(`创建用户后同步到腾讯云 IM [用户ID: ${userId}]`);
         
-        const regResult = await openIMService.registerUser({
+        const regResult = await tencentIMService.registerUser({
           userID: userId,
           nickname: name || username,
           faceURL: '',
+          role: role || 'worker',
         });
         
         if (regResult.success) {
-          console.log(`OpenIM 同步成功 [${userId}]:`, regResult.existed ? '用户已存在' : '新用户注册');
+          console.log(`腾讯云 IM 同步成功 [${userId}]:`, regResult.existed ? '用户已存在' : '新用户注册');
         } else {
-          console.warn(`OpenIM 同步失败 [${userId}]:`, regResult.message);
+          console.warn(`腾讯云 IM 同步失败 [${userId}]:`, regResult.message);
         }
       } catch (err) {
-        console.warn(`OpenIM 同步异常 [${result.insertId}]:`, err.message);
+        console.warn(`腾讯云 IM 同步异常 [${result.insertId}]:`, err.message);
       }
     })();
 
@@ -156,7 +172,7 @@ async function updateUser(req, res) {
     if (email !== undefined) { fields.push('email = ?'); params.push(email); }
     if (project_id !== undefined) { fields.push('project_id = ?'); params.push(project_id || null); }
     if (status !== undefined) { fields.push('status = ?'); params.push(status); }
-    if (avatar !== undefined) { fields.push('avatar = ?'); params.push(avatar); }
+    if (avatar !== undefined) { fields.push('avatar = ?'); params.push(toPublicUrl(req, avatar)); }
 
     if (fields.length === 0) {
       return res.status(400).json(errorResponse('没有可更新的字段', 400));
@@ -165,35 +181,35 @@ async function updateUser(req, res) {
     params.push(req.params.id);
     await db.execute(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`, params);
 
-    // 异步同步到 OpenIM
+    // 异步同步到腾讯云 IM
     (async () => {
       try {
         const userId = req.params.id;
-        console.log(`更新用户后同步到 OpenIM [用户ID: ${userId}]`);
+        console.log(`更新用户后同步到腾讯云 IM [用户ID: ${userId}]`);
         
-        // 获取更新后的用户信息
         const db = getPool();
         const [userRows] = await db.execute(
-          'SELECT name, avatar FROM users WHERE id = ?',
+          'SELECT name, avatar, role FROM users WHERE id = ?',
           [userId]
         );
         
         if (userRows.length > 0) {
           const user = userRows[0];
-          const updateResult = await openIMService.updateUserInfo({
+          const updateResult = await tencentIMService.updateUserInfo({
             userID: userId,
             nickname: user.name,
             faceURL: user.avatar || '',
+            role: user.role,
           });
           
           if (updateResult.success) {
-            console.log(`OpenIM 用户信息更新成功 [${userId}]`);
+            console.log(`腾讯云 IM 用户信息更新成功 [${userId}]`);
           } else {
-            console.warn(`OpenIM 用户信息更新失败 [${userId}]:`, updateResult.message);
+            console.warn(`腾讯云 IM 用户信息更新失败 [${userId}]:`, updateResult.message);
           }
         }
       } catch (err) {
-        console.warn(`OpenIM 同步异常 [${req.params.id}]:`, err.message);
+        console.warn(`腾讯云 IM 同步异常 [${req.params.id}]:`, err.message);
       }
     })();
 
@@ -331,7 +347,7 @@ async function updateCurrentUser(req, res) {
     if (name !== undefined) { fields.push('name = ?'); params.push(name); }
     if (phone !== undefined) { fields.push('phone = ?'); params.push(phone); }
     if (email !== undefined) { fields.push('email = ?'); params.push(email); }
-    if (avatar !== undefined) { fields.push('avatar = ?'); params.push(avatar); }
+    if (avatar !== undefined) { fields.push('avatar = ?'); params.push(toPublicUrl(req, avatar)); }
 
     if (fields.length === 0) {
       return res.status(400).json(errorResponse('没有可更新的字段', 400));
@@ -340,39 +356,45 @@ async function updateCurrentUser(req, res) {
     params.push(req.user.id);
     await db.execute(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`, params);
 
-    // 异步同步到 OpenIM
+    // 异步同步到腾讯云 IM
     (async () => {
       try {
         const userId = req.user.id;
-        console.log(`更新个人信息后同步到 OpenIM [用户ID: ${userId}]`);
+        console.log(`更新个人信息后同步到腾讯云 IM [用户ID: ${userId}]`);
         
-        // 获取更新后的用户信息
         const db = getPool();
         const [userRows] = await db.execute(
-          'SELECT name, avatar FROM users WHERE id = ?',
+          'SELECT name, avatar, role FROM users WHERE id = ?',
           [userId]
         );
         
         if (userRows.length > 0) {
           const user = userRows[0];
-          const updateResult = await openIMService.updateUserInfo({
+          const updateResult = await tencentIMService.updateUserInfo({
             userID: userId,
             nickname: user.name,
             faceURL: user.avatar || '',
+            role: user.role,
           });
           
           if (updateResult.success) {
-            console.log(`OpenIM 个人信息更新成功 [${userId}]`);
+            console.log(`腾讯云 IM 个人信息更新成功 [${userId}]`);
           } else {
-            console.warn(`OpenIM 个人信息更新失败 [${userId}]:`, updateResult.message);
+            console.warn(`腾讯云 IM 个人信息更新失败 [${userId}]:`, updateResult.message);
           }
         }
       } catch (err) {
-        console.warn(`OpenIM 同步异常 [${req.user.id}]:`, err.message);
+        console.warn(`腾讯云 IM 同步异常 [${req.user.id}]:`, err.message);
       }
     })();
 
-    res.json(successResponse(null, '个人信息更新成功'));
+    const [updatedRows] = await db.execute(
+      `SELECT u.id, u.username, u.name, u.role, u.phone, u.email, u.avatar, u.status, u.project_id, u.created_at, p.name as project_name 
+       FROM users u LEFT JOIN projects p ON u.project_id = p.id WHERE u.id = ?`,
+      [req.user.id]
+    );
+
+    res.json(successResponse(updatedRows[0] || null, '个人信息更新成功'));
   } catch (err) {
     console.error('更新当前用户信息失败:', err);
     res.status(500).json(errorResponse('服务器错误'));

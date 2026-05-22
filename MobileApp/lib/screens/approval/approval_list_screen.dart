@@ -58,7 +58,8 @@ class _ApprovalListScreenState extends State<ApprovalListScreen>
 
       setState(() {
         _myApprovals = results[0];
-        _pendingApprovals = results[1].where((a) => a['status'] == 'pending').toList();
+        _pendingApprovals =
+            results[1].where((a) => a['status'] == 'pending').toList();
         _isLoading = false;
       });
     } catch (e) {
@@ -121,7 +122,8 @@ class _ApprovalListScreenState extends State<ApprovalListScreen>
         padding: const EdgeInsets.all(16),
         itemCount: _myApprovals.length,
         itemBuilder: (context, index) {
-          return _buildApprovalCard(_myApprovals[index], isMyApproval: true, colors: colors);
+          return _buildApprovalCard(_myApprovals[index],
+              isMyApproval: true, colors: colors);
         },
       ),
     );
@@ -141,13 +143,15 @@ class _ApprovalListScreenState extends State<ApprovalListScreen>
         padding: const EdgeInsets.all(16),
         itemCount: _pendingApprovals.length,
         itemBuilder: (context, index) {
-          return _buildApprovalCard(_pendingApprovals[index], isMyApproval: false, colors: colors);
+          return _buildApprovalCard(_pendingApprovals[index],
+              isMyApproval: false, colors: colors);
         },
       ),
     );
   }
 
-  Widget _buildApprovalCard(Map<String, dynamic> approval, {required bool isMyApproval, required BentoColors colors}) {
+  Widget _buildApprovalCard(Map<String, dynamic> approval,
+      {required bool isMyApproval, required BentoColors colors}) {
     final type = approval['type'] ?? '';
     final status = approval['status'] ?? 'pending';
     final reason = approval['reason'] ?? '';
@@ -213,7 +217,8 @@ class _ApprovalListScreenState extends State<ApprovalListScreen>
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: typeColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
@@ -360,7 +365,8 @@ class _ApprovalListScreenState extends State<ApprovalListScreen>
 
     if (result != null) {
       try {
-        await _approvalRepo.reject(approval['id'], remark: result, token: token);
+        await _approvalRepo.reject(approval['id'],
+            remark: result, token: token);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('已驳回')),

@@ -74,7 +74,9 @@ class _AiFloatingAssistantState extends State<AiFloatingAssistant> {
                         end: Alignment.bottomRight,
                       ),
                       borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: colors.primary.withValues(alpha: 0.45), width: 2),
+                      border: Border.all(
+                          color: colors.primary.withValues(alpha: 0.45),
+                          width: 2),
                     ),
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -92,12 +94,14 @@ class _AiFloatingAssistantState extends State<AiFloatingAssistant> {
                     width: 42,
                     height: 28,
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(colors: [colors.primary, colors.success]),
+                      gradient: LinearGradient(
+                          colors: [colors.primary, colors.success]),
                       borderRadius: const BorderRadius.vertical(
                         top: Radius.circular(10),
                         bottom: Radius.circular(18),
                       ),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.6)),
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.6)),
                     ),
                   ),
                 ),

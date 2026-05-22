@@ -70,18 +70,24 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         lastCheckinIn: null,
         lastCheckinOut: null,
         totalCheckinsThisMonth: 0,
-        timelineItems: [],
+        timelineItems: const [],
       ));
     }
 
     try {
       // 并行获取所有数据，极大减少等待时间
-      final weatherFuture = WeatherService.getWeatherByLocation(latitude: 39.9042, longitude: 116.4074).catchError((_) => null);
-      final notifFuture = notificationRepository.getNotifications(page: 1, pageSize: 10).catchError((_) => <NotificationModel>[]);
-      
+      final weatherFuture = WeatherService.getWeatherByLocation(
+              latitude: 39.9042, longitude: 116.4074)
+          .catchError((_) => null);
+      final notifFuture = notificationRepository
+          .getNotifications(page: 1, pageSize: 10)
+          .catchError((_) => <NotificationModel>[]);
+
       final results = await Future.wait([
         checkinRepository.getTodayCheckins().catchError((_) => <Checkin>[]),
-        checkinRepository.getMyCheckins(page: 1, pageSize: 100).catchError((_) => <Checkin>[]),
+        checkinRepository
+            .getMyCheckins(page: 1, pageSize: 100)
+            .catchError((_) => <Checkin>[]),
         _fetchMyAttendanceGroup().catchError((_) => null),
         weatherFuture,
         notifFuture,
@@ -93,12 +99,18 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       final weatherInfo = results[3] as WeatherInfo?;
       final notifications = results[4] as List<NotificationModel>? ?? [];
 
-      final inCheckin = todayCheckins.where((c) => c.type == 'in' || c.type == 'clock_in').firstOrNull;
-      final outCheckin = todayCheckins.where((c) => c.type == 'out' || c.type == 'clock_out').firstOrNull;
+      final inCheckin = todayCheckins
+          .where((c) => c.type == 'in' || c.type == 'clock_in')
+          .firstOrNull;
+      final outCheckin = todayCheckins
+          .where((c) => c.type == 'out' || c.type == 'clock_out')
+          .firstOrNull;
 
       final now = DateTime.now();
-      final monthCheckins = allCheckins.where((c) =>
-        c.createdAt.year == now.year && c.createdAt.month == now.month).toList();
+      final monthCheckins = allCheckins
+          .where((c) =>
+              c.createdAt.year == now.year && c.createdAt.month == now.month)
+          .toList();
       final daySet = monthCheckins.map((c) => c.createdAt.day).toSet();
 
       final timelineItems = _buildTimelineItems(todayCheckins, notifications);

@@ -2,7 +2,6 @@ allprojects {
     repositories {
         google()
         mavenCentral()
-        maven(url = "https://mvn.getui.com/nexus/content/repositories/releases/")
     }
 }
 

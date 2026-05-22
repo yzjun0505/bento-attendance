@@ -11,9 +11,13 @@ class UserRepository {
     final q = query.trim();
     if (q.isEmpty) return null;
     try {
-      final response = await apiClient.dio.get('/users/lookup', queryParameters: {'q': q});
+      final response =
+          await apiClient.dio.get('/users/lookup', queryParameters: {'q': q});
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        return User.fromJson(response.data['data']);
+        final data = response.data['data'];
+        if (data is Map<String, dynamic>) {
+          return User.fromJson(data);
+        }
       }
       return null;
     } catch (_) {
@@ -25,7 +29,10 @@ class UserRepository {
     try {
       final response = await apiClient.dio.get('/users/me');
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        return User.fromJson(response.data['data']);
+        final data = response.data['data'];
+        if (data is Map<String, dynamic>) {
+          return User.fromJson(data);
+        }
       }
       throw Exception('获取用户信息失败');
     } catch (e) {
@@ -47,9 +54,13 @@ class UserRepository {
         if (avatar != null) 'avatar': avatar,
       });
       if (response.statusCode == 200 && response.data['code'] == 200) {
-        return User.fromJson(response.data['data']);
+        final data = response.data['data'];
+        if (data is Map<String, dynamic>) {
+          return User.fromJson(data);
+        }
+        return getCurrentUser();
       }
-      throw Exception('更新用户信息失败');
+      throw Exception(response.data['message'] ?? '更新用户信息失败');
     } catch (e) {
       rethrow;
     }

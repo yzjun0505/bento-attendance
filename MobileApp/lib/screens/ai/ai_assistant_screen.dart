@@ -76,7 +76,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
         _messages.add(_AiMessage(
           role: 'assistant',
           content: data['message']?.toString() ?? '已完成查询',
-          result: data['result'] is Map ? Map<String, dynamic>.from(data['result']) : null,
+          result: data['result'] is Map
+              ? Map<String, dynamic>.from(data['result'])
+              : null,
         ));
       });
     } catch (e) {
@@ -100,10 +102,12 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
           ? (resultPayload['message']?.toString() ?? '操作已完成')
           : '操作已完成';
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('操作失败：$e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('操作失败：$e')));
     } finally {
       if (mounted) setState(() => _confirmingActionId = null);
     }
@@ -151,7 +155,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
       body: Column(
         children: [
           Expanded(
-            child: _messages.isEmpty ? _buildWelcome(colors) : _buildMessages(colors),
+            child: _messages.isEmpty
+                ? _buildWelcome(colors)
+                : _buildMessages(colors),
           ),
           _buildInput(colors),
         ],
@@ -210,7 +216,8 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.86),
+        constraints:
+            BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.86),
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
@@ -273,7 +280,8 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
                   ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 ),
               ),
             ),
@@ -305,9 +313,13 @@ class _AiResultView extends StatelessWidget {
     final colors = context.colors;
     final cards = result['cards'] is List ? result['cards'] as List : const [];
     final rows = result['rows'] is List ? result['rows'] as List : const [];
-    final columns = result['columns'] is List ? result['columns'] as List : const [];
-    final action = result['action'] is Map ? Map<String, dynamic>.from(result['action']) : null;
-    final actionId = action == null ? null : int.tryParse(action['id']?.toString() ?? '');
+    final columns =
+        result['columns'] is List ? result['columns'] as List : const [];
+    final action = result['action'] is Map
+        ? Map<String, dynamic>.from(result['action'])
+        : null;
+    final actionId =
+        action == null ? null : int.tryParse(action['id']?.toString() ?? '');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -329,11 +341,16 @@ class _AiResultView extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(card['label']?.toString() ?? '', style: TextStyle(color: colors.textSecondary, fontSize: 12)),
+                    Text(card['label']?.toString() ?? '',
+                        style: TextStyle(
+                            color: colors.textSecondary, fontSize: 12)),
                     const SizedBox(height: 4),
                     Text(
                       card['value']?.toString() ?? '-',
-                      style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.w800),
+                      style: TextStyle(
+                          color: colors.textPrimary,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800),
                     ),
                   ],
                 ),
@@ -363,7 +380,8 @@ class _AiResultView extends StatelessWidget {
                       '${col['label']}: ${row[prop] ?? '-'}',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: colors.textSecondary, fontSize: 12),
+                      style:
+                          TextStyle(color: colors.textSecondary, fontSize: 12),
                     ),
                   );
                 }).toList(),
@@ -385,11 +403,14 @@ class _AiResultView extends StatelessWidget {
               children: [
                 Text(
                   action['title']?.toString() ?? '待确认操作',
-                  style: TextStyle(color: colors.warning, fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                      color: colors.warning, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 8),
                 FilledButton(
-                  onPressed: confirmingActionId == actionId ? null : () => onConfirm(action),
+                  onPressed: confirmingActionId == actionId
+                      ? null
+                      : () => onConfirm(action),
                   child: Text(confirmingActionId == actionId ? '执行中' : '确认执行'),
                 ),
               ],

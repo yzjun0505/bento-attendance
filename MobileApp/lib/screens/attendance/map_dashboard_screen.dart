@@ -32,11 +32,6 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
   bool get wantKeepAlive => true;
 
   @override
-  void initState() {
-    super.initState();
-  }
-
-  @override
   Widget build(BuildContext context) {
     super.build(context);
     final colors = context.colors;
@@ -327,7 +322,7 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
                                           ),
                                         ),
                                         Text(
-                                          '${state.todayShiftStart ?? '--:--'} - ${state.todayShiftEnd ?? '--:--'} · 迟到容忍 ${state.lateTolerance} 分钟',
+                                          '${state.todayShiftStart ?? '--:--'} - ${state.todayShiftEnd ?? '--:--'}',
                                           style: theme.textTheme.bodySmall
                                               ?.copyWith(
                                             color: colors.textSecondary,
@@ -386,6 +381,7 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
                             children: [
                               Expanded(
                                 child: _buildCheckinCard(
+                                  key: const ValueKey('checkin_clock_in'),
                                   context: context,
                                   title: '上班',
                                   time: _getClockInTime(state),
@@ -408,6 +404,7 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
                               const SizedBox(width: 16),
                               Expanded(
                                 child: _buildCheckinCard(
+                                  key: const ValueKey('checkin_clock_out'),
                                   context: context,
                                   title: '下班',
                                   time: _getClockOutTime(state),
@@ -827,6 +824,7 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
   }
 
   Widget _buildCheckinCard({
+    Key? key,
     required BuildContext context,
     required String title,
     required String time,
@@ -845,6 +843,7 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
     }
 
     return BentoCard.interactive(
+      key: key,
       onTap: (!enabled || isSubmitting) ? null : onTap,
       borderRadius: BentoRadius.md,
       padding: const EdgeInsets.symmetric(
@@ -970,8 +969,7 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
   /// 大号水印拍照按钮
   Widget _buildBigPhotoButton(BuildContext context, AttendanceState state,
       BentoColors colors, ThemeData theme) {
-    final isSubmitting =
-        state is AttendanceLoaded && (state as AttendanceLoaded).isSubmitting;
+    final isSubmitting = state is AttendanceLoaded && (state).isSubmitting;
 
     return GestureDetector(
       onTap: isSubmitting
@@ -1009,11 +1007,11 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
                   ),
                 ),
               )
-            : Column(
+            : const Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(Icons.camera_alt_rounded, size: 32, color: Colors.white),
-                  const SizedBox(height: 4),
+                  SizedBox(height: 4),
                   Text(
                     '水印拍照',
                     style: TextStyle(
@@ -1032,18 +1030,28 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
     final attendanceBloc = context.read<AttendanceBloc>();
     final state = attendanceBloc.state;
 
-    if (state is AttendanceLoaded) {
-      // 正在提交中，不重复触发
-      if (state.isSubmitting) return;
+    debugPrint('[MapDashboard] _handleCheckin called, type=$type');
 
-      // 如果需要项目确认，先弹窗选择项目
+    if (state is AttendanceLoaded) {
+      if (state.isSubmitting) {
+        debugPrint('[MapDashboard] _handleCheckin ignored: isSubmitting=true');
+        return;
+      }
+
       if (state.needsProjectConfirmation && state.activeProjectId == null) {
+        debugPrint('[MapDashboard] _handleCheckin showing project selector');
         _showProjectSelector(context, state);
         return;
       }
 
+      final normalizedType = type == 'clock_in' || type == 'in'
+          ? 'clock_in'
+          : (type == 'clock_out' || type == 'out' ? 'clock_out' : type);
+
+      debugPrint('[MapDashboard] _handleCheckin dispatching SubmitCheckin(type=$normalizedType)');
+
       attendanceBloc.add(SubmitCheckin(
-        type: type,
+        type: normalizedType,
         projectId: state.activeProjectId,
       ));
     }

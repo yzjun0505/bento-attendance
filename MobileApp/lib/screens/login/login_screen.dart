@@ -1,7 +1,5 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../api/dio_client.dart';
 import '../../blocs/auth/auth_bloc.dart';
 import '../../blocs/auth/auth_event.dart';
 import '../../blocs/auth/auth_state.dart';
@@ -20,21 +18,12 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _serverController = TextEditingController();
   bool _obscurePassword = true;
-  bool _testingServer = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _serverController.text = ApiClient.baseUrl;
-  }
 
   @override
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();
-    _serverController.dispose();
     super.dispose();
   }
 
@@ -59,36 +48,6 @@ class _LoginScreenState extends State<LoginScreen> {
     if (username != null && username.isNotEmpty && mounted) {
       _usernameController.text = username;
       _showMessage('注册成功，请输入密码登录');
-    }
-  }
-
-  Future<void> _saveServerAddress(String value) async {
-    final normalized = ApiClient.normalizeApiBaseUrl(value);
-    await ApiClient.saveRuntimeApiBaseUrl(normalized);
-    if (!mounted) return;
-    context.read<AuthBloc>().apiClient.reloadOptions();
-    _serverController.text = normalized;
-  }
-
-  Future<void> _testServer(String value) async {
-    setState(() => _testingServer = true);
-    final normalized = ApiClient.normalizeApiBaseUrl(value);
-    try {
-      final dio = Dio(BaseOptions(
-        baseUrl: normalized,
-        connectTimeout: const Duration(seconds: 5),
-        receiveTimeout: const Duration(seconds: 5),
-      ));
-      final resp = await dio.get('/health');
-      final ok = resp.statusCode == 200 &&
-          (resp.data['code'] == 200 || resp.data['message'] == 'OK');
-      if (!mounted) return;
-      _showMessage(ok ? '后端连接正常' : '后端可访问，但依赖状态异常');
-    } catch (_) {
-      if (!mounted) return;
-      _showMessage('连接失败，请确认电脑和手机在同一网络，且后端已启动');
-    } finally {
-      if (mounted) setState(() => _testingServer = false);
     }
   }
 
@@ -126,8 +85,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     _buildHeader(colors, theme),
                     const SizedBox(height: BentoSpacing.space24),
                     _buildLoginForm(colors, theme),
-                    const SizedBox(height: BentoSpacing.space16),
-                    _buildServerCard(colors, theme),
                     const SizedBox(height: BentoSpacing.space20),
                     _buildLoginButton(colors),
                     const SizedBox(height: BentoSpacing.space12),
@@ -218,50 +175,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildServerCard(BentoColors colors, ThemeData theme) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(BentoRadius.md),
-        border: Border.all(color: colors.border),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.dns_outlined, color: colors.primary, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '后端服务地址',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colors.textTertiary,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  ApiClient.baseUrl,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colors.textSecondary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          TextButton(
-            onPressed: _showServerSettings,
-            child: const Text('修改'),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildLoginButton(BentoColors colors) {
     return BlocBuilder<AuthBloc, AuthState>(
       builder: (context, state) {
@@ -330,106 +243,6 @@ class _LoginScreenState extends State<LoginScreen> {
               child: const Text('知道了'),
             ),
           ],
-        );
-      },
-    );
-  }
-
-  Future<void> _showServerSettings() async {
-    final colors = context.colors;
-    _serverController.text = ApiClient.baseUrl;
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: colors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-      ),
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                left: BentoSpacing.space20,
-                right: BentoSpacing.space20,
-                top: BentoSpacing.space20,
-                bottom: MediaQuery.of(sheetContext).viewInsets.bottom +
-                    BentoSpacing.space20,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    '配置后端服务',
-                    style: TextStyle(
-                      color: colors.textPrimary,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '真机调试时填电脑局域网 IP，例如 http://192.168.1.10:3000/api',
-                    style: TextStyle(
-                        color: colors.textSecondary, fontSize: 13, height: 1.4),
-                  ),
-                  const SizedBox(height: BentoSpacing.space16),
-                  TextField(
-                    controller: _serverController,
-                    keyboardType: TextInputType.url,
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.link),
-                      hintText: 'http://192.168.1.10:3000/api',
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(BentoRadius.sm)),
-                    ),
-                  ),
-                  const SizedBox(height: BentoSpacing.space16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _testingServer
-                              ? null
-                              : () async {
-                                  setSheetState(() => _testingServer = true);
-                                  await _testServer(_serverController.text);
-                                  if (mounted) {
-                                    setSheetState(() => _testingServer = false);
-                                  }
-                                },
-                          icon: _testingServer
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : const Icon(Icons.network_check),
-                          label: const Text('测试'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () async {
-                            await _saveServerAddress(_serverController.text);
-                            if (mounted && sheetContext.mounted) {
-                              Navigator.pop(sheetContext);
-                              _showMessage('服务地址已保存');
-                            }
-                          },
-                          icon: const Icon(Icons.check),
-                          label: const Text('保存'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          },
         );
       },
     );
