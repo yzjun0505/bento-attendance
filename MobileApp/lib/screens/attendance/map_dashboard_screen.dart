@@ -1189,7 +1189,33 @@ class _AMapWrapperState extends State<_AMapWrapper> {
   @override
   void initState() {
     super.initState();
+    // 立即同步尝试加载缓存 GPS，避免地图默认显示北京
     _loadLastKnownPosition();
+    // 如果缓存为空，异步获取最新位置
+    _getFreshPositionIfNeeded();
+  }
+
+  /// 如果没有缓存位置，尝试获取最新 GPS（避免地图默认显示北京）
+  Future<void> _getFreshPositionIfNeeded() async {
+    // 稍等一下让 initState 完成
+    await Future.delayed(const Duration(milliseconds: 100));
+    if (_cachedLat != null && _cachedLng != null) return;
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.low,
+        timeLimit: const Duration(seconds: 5),
+      );
+      if (pos != null && mounted) {
+        final gcj = CoordUtils.wgs84ToGcj02(pos.latitude, pos.longitude);
+        setState(() {
+          _cachedLat ??= gcj['latitude'];
+          _cachedLng ??= gcj['longitude'];
+        });
+      }
+    } catch (_) {
+      // GPS 不可用，回退到 Geolocator.getLastKnownPosition 再做一次尝试
+      _loadLastKnownPosition();
+    }
   }
 
   /// 获取设备缓存的最后已知位置（几乎瞬间返回，无需等待 GPS 锁定）

@@ -1,12 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../core/bento_colors.dart';
 import '../../core/bento_typography.dart';
 import '../../widgets/amap_webview.dart';
 import '../../repositories/track_repository.dart';
+import '../../utils/coord_utils.dart';
 
 /// 高德地图 Web JS API Key
-/// 请在运行时通过 --dart-define=AMAP_WEB_KEY=your_key 传入
 const _kAmapWebKey = String.fromEnvironment('AMAP_WEB_KEY',
     defaultValue: '801b526de6c904197d85471544b61d75');
 
@@ -26,15 +28,34 @@ class _TrackScreenState extends State<TrackScreen> {
   final AMapController _mapController = AMapController();
   late String _selectedDate;
   Map<String, dynamic>? _trackData;
+  List<Map<String, dynamic>> _trackPoints = [];
+  List<Map<String, dynamic>> _stayPoints = [];
   bool _loading = false;
   String? _error;
+  double? _initLng;
+  double? _initLat;
 
   @override
   void initState() {
     super.initState();
     _selectedDate =
         widget.initialDate ?? DateFormat('yyyy-MM-dd').format(DateTime.now());
+    _loadInitialPosition();
     _loadTrack();
+  }
+
+  /// 优先加载缓存 GPS 作为地图初始中心，避免默认显示北京
+  Future<void> _loadInitialPosition() async {
+    try {
+      final pos = await Geolocator.getLastKnownPosition();
+      if (pos != null && mounted) {
+        final gcj = CoordUtils.wgs84ToGcj02(pos.latitude, pos.longitude);
+        setState(() {
+          _initLng = gcj['longitude'];
+          _initLat = gcj['latitude'];
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadTrack() async {
@@ -50,11 +71,35 @@ class _TrackScreenState extends State<TrackScreen> {
       } else {
         data = await _trackRepo.getMyTrack(_selectedDate);
       }
+      if (data == null) {
+        setState(() {
+          _loading = false;
+          _error = '暂无轨迹数据';
+        });
+        return;
+      }
+
+      // 后端返回 'track' 数组，转换为内部使用的 'points'
+      final rawTrack = data['track'] as List? ?? [];
+      final stayPoints = (data['stay_points'] as List?)
+              ?.map((e) => e as Map<String, dynamic>)
+              .toList() ??
+          [];
+      final totalDistance = data['total_distance'] ?? 0;
+      final totalPoints = data['total_points'] ?? rawTrack.length;
+
       setState(() {
-        _trackData = data;
+        _trackPoints = rawTrack.map((e) => e as Map<String, dynamic>).toList();
+        _stayPoints = stayPoints;
+        _trackData = {
+          'total_distance': totalDistance,
+          'total_points': totalPoints,
+          'stay_points': stayPoints,
+          'points': _trackPoints,
+        };
         _loading = false;
       });
-      if (data != null) _drawTrackOnMap();
+      _drawTrackOnMap();
     } catch (e) {
       setState(() {
         _loading = false;
@@ -64,15 +109,26 @@ class _TrackScreenState extends State<TrackScreen> {
   }
 
   void _drawTrackOnMap() {
-    if (!_mapController.isReady || _trackData == null) return;
-    final points = _trackData!['points'] as List? ?? [];
-    if (points.isEmpty) return;
+    if (!_mapController.isReady || _trackPoints.isEmpty) return;
 
-    final path = points
-        .map((p) => {'lng': p['longitude'], 'lat': p['latitude']})
+    final path = _trackPoints
+        .map((p) => {
+              'lng': p['longitude'],
+              'lat': p['latitude'],
+            })
         .toList();
 
     _mapController.drawTrack(path);
+
+    // 如果有轨迹坐标，以第一个点为地图中心
+    if (_trackPoints.isNotEmpty) {
+      final first = _trackPoints.first;
+      _mapController.moveToLocation(
+        (first['longitude'] as num).toDouble(),
+        (first['latitude'] as num).toDouble(),
+        zoom: 14,
+      );
+    }
   }
 
   void _pickDate() async {
@@ -132,7 +188,7 @@ class _TrackScreenState extends State<TrackScreen> {
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
-                      '${_trackData!['total_distance'] ?? 0} km · ${(_trackData!['points'] as List?)?.length ?? 0} 点',
+                      '${_trackData!['total_distance'] ?? 0} m · ${_trackData!['total_points'] ?? 0} 点',
                       style: theme.textTheme.labelSmall
                           ?.copyWith(color: colors.primary),
                     ),
@@ -150,6 +206,8 @@ class _TrackScreenState extends State<TrackScreen> {
                 AMapWebView(
                   apiKey: _kAmapWebKey,
                   controller: _mapController,
+                  initialLng: _initLng,
+                  initialLat: _initLat,
                   isDarkMode: theme.brightness == Brightness.dark,
                   onMapReady: _drawTrackOnMap,
                 ),
@@ -209,21 +267,21 @@ class _TrackScreenState extends State<TrackScreen> {
                             _buildStatCard(
                                 context,
                                 '总里程',
-                                '${_trackData!['total_distance'] ?? 0} km',
+                                '${(_trackData!['total_distance'] ?? 0)} m',
                                 Icons.route,
                                 colors),
                             const SizedBox(width: 12),
                             _buildStatCard(
                                 context,
                                 '轨迹点',
-                                '${(_trackData!['points'] as List?)?.length ?? 0}',
+                                '${_trackData!['total_points'] ?? 0}',
                                 Icons.timeline,
                                 colors),
                             const SizedBox(width: 12),
                             _buildStatCard(
                                 context,
                                 '停留点',
-                                '${(_trackData!['stops'] as List?)?.length ?? 0}',
+                                '${_stayPoints.length}',
                                 Icons.access_time_filled,
                                 colors),
                           ],
@@ -267,8 +325,7 @@ class _TrackScreenState extends State<TrackScreen> {
   }
 
   List<Widget> _buildStopsList(BentoColors colors, ThemeData theme) {
-    final stops = _trackData?['stops'] as List? ?? [];
-    if (stops.isEmpty) return [];
+    if (_stayPoints.isEmpty) return [];
 
     return [
       const SizedBox(height: 16),
@@ -276,7 +333,7 @@ class _TrackScreenState extends State<TrackScreen> {
           style: theme.textTheme.titleSmall?.copyWith(
               color: colors.textPrimary, fontWeight: FontWeight.w600)),
       const SizedBox(height: 8),
-      ...stops.map((stop) => GestureDetector(
+      ..._stayPoints.map((stop) => GestureDetector(
             onTap: () {
               if (stop['longitude'] != null && stop['latitude'] != null) {
                 _mapController.moveToLocation(

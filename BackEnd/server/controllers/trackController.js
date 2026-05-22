@@ -132,6 +132,15 @@ async function getTrack(req, res) {
 }
 
 /**
+ * 获取自己的轨迹
+ * GET /api/tracks/me?date=2024-01-01
+ */
+async function getMyTrack(req, res) {
+  req.params.userId = String(req.user.id);
+  return getTrack(req, res);
+}
+
+/**
  * 获取轨迹热力图数据（某区域内所有用户的活动密度）
  * GET /api/tracks/heatmap?date_start=&date_end=&project_id=
  */
@@ -187,4 +196,4 @@ function calculateDistance(lat1, lng1, lat2, lng2) {
   return R * c;
 }
 
-module.exports = { getTrack, getHeatmap };
+module.exports = { getTrack, getMyTrack, getHeatmap };
