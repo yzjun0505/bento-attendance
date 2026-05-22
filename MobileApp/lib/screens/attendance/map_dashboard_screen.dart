@@ -978,7 +978,7 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
     );
   }
 
-  void _handleCheckin(BuildContext context, String type) {
+  Future<void> _handleCheckin(BuildContext context, String type) async {
     final attendanceBloc = context.read<AttendanceBloc>();
     final state = attendanceBloc.state;
 
@@ -988,6 +988,55 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
       if (state.isSubmitting) {
         debugPrint('[MapDashboard] _handleCheckin ignored: isSubmitting=true');
         return;
+      }
+
+      // 防误触：重复打卡拦截
+      final isClockIn = type == 'clock_in';
+      if (isClockIn && state.isClockInCompleted) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('⏰ 您今天已经打过上班卡，无需重复打卡'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
+      if (!isClockIn && state.isClockOutCompleted) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('🏠 您今天已经打过下班卡，无需重复打卡'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
+      if (!isClockIn && !state.isClockInCompleted) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('⚠️ 请先打上班卡，再打下班卡'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
+
+      // 防误触：确认弹窗
+      if (context.mounted) {
+        final confirmed = await _showCheckinConfirmDialog(
+          context,
+          isClockIn: isClockIn,
+          projectName: state.activeProjectName,
+        );
+        if (confirmed != true) return;
       }
 
       if (state.needsProjectConfirmation && state.activeProjectId == null) {
@@ -1007,6 +1056,107 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
         projectId: state.activeProjectId,
       ));
     }
+  }
+
+  /// 打卡确认弹窗
+  Future<bool?> _showCheckinConfirmDialog(
+    BuildContext context, {
+    required bool isClockIn,
+    required String projectName,
+  }) {
+    final colors = context.colors;
+    final icon = isClockIn ? Icons.login : Icons.logout;
+    final label = isClockIn ? '上班打卡' : '下班打卡';
+    final color = isClockIn ? colors.success : colors.error;
+    final now = DateTime.now();
+    final timeStr =
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: colors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(BentoRadius.lg),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 32),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              label,
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '项目：$projectName',
+              style: TextStyle(color: colors.textSecondary, fontSize: 14),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '时间：$timeStr',
+              style: TextStyle(color: colors.textSecondary, fontSize: 14),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: colors.warningLight.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, size: 16, color: colors.warning),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      isClockIn
+                          ? '确认后即记录为今日上班时间'
+                          : '确认后即记录为今日下班时间',
+                      style: TextStyle(color: colors.warning, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actionsAlignment: MainAxisAlignment.spaceEvenly,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('取消',
+                style: TextStyle(color: colors.textSecondary, fontSize: 16)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: color,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(BentoRadius.md),
+              ),
+            ),
+            child: Text('确认$label',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 }
 
