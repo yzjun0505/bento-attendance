@@ -26,28 +26,40 @@ async function getWorkbench(req, res) {
 
     const result = [];
     for (const project of projects) {
-      const [[stats]] = await db.query(`
-        SELECT
-          COUNT(*) as totalNodes,
-          SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completedNodes,
-          SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as inProgressNodes,
-          SUM(CASE WHEN plan_end_date < CURDATE() AND status != 'completed' THEN 1 ELSE 0 END) as overdueNodes,
-          SUM(CASE WHEN status = 'paused' THEN 1 ELSE 0 END) as pausedNodes,
-          ROUND(AVG(progress_percent), 1) as overallProgress
-        FROM task_nodes WHERE project_id = ?
-      `, [project.id]);
+      let stats = { totalNodes: 0, completedNodes: 0, inProgressNodes: 0, overdueNodes: 0, pausedNodes: 0, overallProgress: 0 };
+      try {
+        const [[s]] = await db.query(`
+          SELECT
+            COUNT(*) as totalNodes,
+            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completedNodes,
+            SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as inProgressNodes,
+            SUM(CASE WHEN plan_end_date < CURDATE() AND status != 'completed' THEN 1 ELSE 0 END) as overdueNodes,
+            SUM(CASE WHEN status = 'paused' THEN 1 ELSE 0 END) as pausedNodes,
+            ROUND(AVG(progress_percent), 1) as overallProgress
+          FROM task_nodes WHERE project_id = ?
+        `, [project.id]);
+        if (s) stats = s;
+      } catch (_) {}
 
-      const [[lastReport]] = await db.query(`
-        SELECT MAX(pr.created_at) as lastTime
-        FROM progress_reports pr
-        INNER JOIN task_nodes tn ON pr.node_id = tn.id
-        WHERE tn.project_id = ?
-      `, [project.id]);
+      let lastTime = null;
+      try {
+        const [[lr]] = await db.query(`
+          SELECT MAX(pr.created_at) as lastTime
+          FROM progress_reports pr
+          INNER JOIN task_nodes tn ON pr.node_id = tn.id
+          WHERE tn.project_id = ?
+        `, [project.id]);
+        if (lr) lastTime = lr.lastTime;
+      } catch (_) {}
 
-      const [[assignee]] = await db.query(`
-        SELECT COUNT(DISTINCT assignee_id) as count
-        FROM task_nodes WHERE project_id = ? AND assignee_id IS NOT NULL
-      `, [project.id]);
+      let assigneeCount = 0;
+      try {
+        const [[a]] = await db.query(`
+          SELECT COUNT(DISTINCT assignee_id) as count
+          FROM task_nodes WHERE project_id = ? AND assignee_id IS NOT NULL
+        `, [project.id]);
+        if (a) assigneeCount = a.count;
+      } catch (_) {}
 
       result.push({
         id: project.id,
@@ -60,8 +72,8 @@ async function getWorkbench(req, res) {
         inProgressNodes: stats.inProgressNodes || 0,
         overdueNodes: stats.overdueNodes || 0,
         pausedNodes: stats.pausedNodes || 0,
-        lastReportTime: lastReport.lastTime || null,
-        assigneeCount: assignee.count || 0,
+        lastReportTime: lastTime || null,
+        assigneeCount,
       });
     }
 
@@ -89,16 +101,20 @@ async function getProjectSummary(req, res) {
       return res.status(403).json(errorResponse('无权限访问该项目', 403));
     }
 
-    const [[stats]] = await db.query(`
-      SELECT
-        COUNT(*) as totalNodes,
-        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completedNodes,
-        SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as inProgressNodes,
-        SUM(CASE WHEN plan_end_date < CURDATE() AND status != 'completed' THEN 1 ELSE 0 END) as overdueNodes,
-        SUM(CASE WHEN status = 'paused' THEN 1 ELSE 0 END) as pausedNodes,
-        ROUND(AVG(progress_percent), 1) as overallProgress
-      FROM task_nodes WHERE project_id = ?
-    `, [projectId]);
+    let stats = { totalNodes: 0, completedNodes: 0, inProgressNodes: 0, overdueNodes: 0, pausedNodes: 0, overallProgress: 0 };
+    try {
+      const [[s]] = await db.query(`
+        SELECT
+          COUNT(*) as totalNodes,
+          SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completedNodes,
+          SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as inProgressNodes,
+          SUM(CASE WHEN plan_end_date < CURDATE() AND status != 'completed' THEN 1 ELSE 0 END) as overdueNodes,
+          SUM(CASE WHEN status = 'paused' THEN 1 ELSE 0 END) as pausedNodes,
+          ROUND(AVG(progress_percent), 1) as overallProgress
+        FROM task_nodes WHERE project_id = ?
+      `, [projectId]);
+      if (s) stats = s;
+    } catch (_) {}
 
     const phases = ['preparation', 'construction', 'inspection', 'rectification', 'delivery'];
     const phaseLabels = {
@@ -110,33 +126,41 @@ async function getProjectSummary(req, res) {
     };
     const phaseStats = [];
     for (const phase of phases) {
-      const [[ps]] = await db.query(`
-        SELECT
-          COUNT(*) as nodeCount,
-          SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completedCount
-        FROM task_nodes WHERE project_id = ? AND phase = ?
-      `, [projectId, phase]);
+      let nodeCount = 0, completedCount = 0;
+      try {
+        const [[ps]] = await db.query(`
+          SELECT
+            COUNT(*) as nodeCount,
+            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completedCount
+          FROM task_nodes WHERE project_id = ? AND phase = ?
+        `, [projectId, phase]);
+        if (ps) { nodeCount = ps.nodeCount || 0; completedCount = ps.completedCount || 0; }
+      } catch (_) {}
       phaseStats.push({
         phase,
         label: phaseLabels[phase],
-        nodeCount: ps.nodeCount || 0,
-        completedCount: ps.completedCount || 0,
-        completionRate: ps.nodeCount > 0 ? Math.round((ps.completedCount / ps.nodeCount) * 100) : 0,
+        nodeCount,
+        completedCount,
+        completionRate: nodeCount > 0 ? Math.round((completedCount / nodeCount) * 100) : 0,
       });
     }
 
-    const [reports] = await db.query(`
-      SELECT pr.id, pr.node_id as nodeId, pr.description, pr.photo,
-             pr.progress_percent as progressPercent,
-             pr.risk_note as riskNote, pr.blocker_note as blockerNote,
-             pr.photos, pr.created_at as createdAt,
-             u.name as reporterName, tn.title as nodeTitle
-      FROM progress_reports pr
-      INNER JOIN task_nodes tn ON pr.node_id = tn.id
-      LEFT JOIN users u ON pr.reporter_id = u.id
-      WHERE tn.project_id = ?
-      ORDER BY pr.created_at DESC LIMIT 10
-    `, [projectId]);
+    let reports = [];
+    try {
+      const [r] = await db.query(`
+        SELECT pr.id, pr.node_id as nodeId, pr.description, pr.photo,
+               pr.progress_percent as progressPercent,
+               pr.risk_note as riskNote, pr.blocker_note as blockerNote,
+               pr.photos, pr.created_at as createdAt,
+               u.name as reporterName, tn.title as nodeTitle
+        FROM progress_reports pr
+        INNER JOIN task_nodes tn ON pr.node_id = tn.id
+        LEFT JOIN users u ON pr.reporter_id = u.id
+        WHERE tn.project_id = ?
+        ORDER BY pr.created_at DESC LIMIT 10
+      `, [projectId]);
+      reports = r;
+    } catch (_) {}
 
     res.json(successResponse({
       projectId: parseInt(projectId),
