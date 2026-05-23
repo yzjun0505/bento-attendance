@@ -165,7 +165,12 @@ class _ProgressWorkbenchScreenState extends State<ProgressWorkbenchScreen> {
                 ),
               ),
             ),
-          );
+          ).then((_) {
+            // 返回时重新加载项目列表，避免子页面的事件覆盖了项目列表状态
+            if (mounted) {
+              context.read<ProgressBloc>().add(const LoadAuthorizedProjects());
+            }
+          });
         },
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
