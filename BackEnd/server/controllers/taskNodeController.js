@@ -317,10 +317,24 @@ async function createReport(req, res) {
       ]
     );
 
-    await db.execute(
-      'UPDATE task_nodes SET progress_percent = ? WHERE id = ?',
-      [progress_percent, nodeId]
-    );
+    // 更新进度 + 自动状态流转
+    if (progress_percent >= 100) {
+      await db.execute(
+        'UPDATE task_nodes SET progress_percent = ?, status = ? WHERE id = ?',
+        [100, 'completed', nodeId]
+      );
+    } else if (progress_percent > 0) {
+      // >0% 且未完成：状态 from pending → in_progress
+      await db.execute(
+        "UPDATE task_nodes SET progress_percent = ?, status = IF(status = 'pending', 'in_progress', status) WHERE id = ?",
+        [progress_percent, nodeId]
+      );
+    } else {
+      await db.execute(
+        'UPDATE task_nodes SET progress_percent = ? WHERE id = ?',
+        [progress_percent, nodeId]
+      );
+    }
 
     const [reportRows] = await db.query(
       `SELECT pr.id, pr.node_id, pr.reporter_id, pr.description, pr.photo,

@@ -106,6 +106,31 @@ class _SubmitProgressScreenState extends State<SubmitProgressScreen> {
     }
   }
 
+  Widget _buildQuickButton(String label, int percent, BentoColors colors) {
+    final isSelected = _progressPercent.round() == percent;
+    return GestureDetector(
+      onTap: () => setState(() => _progressPercent = percent.toDouble()),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? colors.primary : colors.surfaceVariant,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? colors.primary : colors.border,
+          ),
+        ),
+        child: Text(
+          '$label $percent%',
+          style: TextStyle(
+            color: isSelected ? Colors.white : colors.textSecondary,
+            fontSize: 13,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showPhotoSheet() {
     showModalBottomSheet(
       context: context,
@@ -234,6 +259,19 @@ class _SubmitProgressScreenState extends State<SubmitProgressScreen> {
                     ),
               ),
               const SizedBox(height: BentoSpacing.space8),
+              // 快捷进度按钮
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildQuickButton('开始施工', 10, colors),
+                  _buildQuickButton('进行中', 50, colors),
+                  _buildQuickButton('基本完工', 90, colors),
+                  _buildQuickButton('全部完成', 100, colors),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // 自定义滑动条
               Row(
                 children: [
                   Expanded(
@@ -263,6 +301,43 @@ class _SubmitProgressScreenState extends State<SubmitProgressScreen> {
                   ),
                 ],
               ),
+              // 状态提示
+              if (_progressPercent >= 100 && widget.node.status != 'completed')
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(top: 8),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: colors.success.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.check_circle, size: 16, color: colors.success),
+                      const SizedBox(width: 8),
+                      Text('提交后将自动标记为「已完成」',
+                          style: TextStyle(color: colors.success, fontSize: 12)),
+                    ],
+                  ),
+                )
+              else if (_progressPercent > 0 && widget.node.status == 'pending')
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(top: 8),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: colors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.play_arrow, size: 16, color: colors.primary),
+                      const SizedBox(width: 8),
+                      Text('提交后将自动变更为「进行中」',
+                          style: TextStyle(color: colors.primary, fontSize: 12)),
+                    ],
+                  ),
+                ),
               const SizedBox(height: BentoSpacing.space24),
               Text(
                 '风险说明${widget.node.isOverdue ? "（必填）" : "（可选）"}',
