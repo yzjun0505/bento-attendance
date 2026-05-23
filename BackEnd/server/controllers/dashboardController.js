@@ -20,11 +20,14 @@ async function getStats(req, res) {
     const db = getPool();
     const { start, end } = getTodayRange();
 
-    // 今日出勤总人数（上班打卡去重）
+    // 今日出勤总人数（上班打卡去重，排除管理员）
     const [attendanceRows] = await db.execute(
-      `SELECT COUNT(DISTINCT user_id) as total 
-       FROM checkins 
-       WHERE (type = 'in' OR type = 'clock_in') AND created_at >= ? AND created_at < ?`,
+      `SELECT COUNT(DISTINCT c.user_id) as total
+       FROM checkins c
+       INNER JOIN users u ON c.user_id = u.id
+       WHERE (c.type = 'in' OR c.type = 'clock_in')
+         AND c.created_at >= ? AND c.created_at < ?
+         AND u.role != 'admin'`,
       [start, end]
     );
 

@@ -47,7 +47,7 @@ async function analyzeAttendance() {
         `SELECT agm.user_id, u.name as user_name
          FROM attendance_group_members agm
          LEFT JOIN users u ON agm.user_id = u.id
-         WHERE agm.group_id = ? AND u.status = 1`,
+         WHERE agm.group_id = ? AND u.status = 1 AND u.role != 'admin'`,
         [group.id]
       );
 
@@ -131,19 +131,21 @@ async function sendDailyReport() {
 
     const [[summary]] = await db.query(`
       SELECT
-        COUNT(DISTINCT user_id) as totalAttendees,
-        SUM(CASE WHEN status = 'normal' THEN 1 ELSE 0 END) as normalCount,
-        SUM(CASE WHEN status = 'late' THEN 1 ELSE 0 END) as lateCount,
-        SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absentCount,
-        SUM(CASE WHEN status = 'leave' THEN 1 ELSE 0 END) as leaveCount,
-        SUM(CASE WHEN status = 'early_leave' THEN 1 ELSE 0 END) as earlyLeaveCount
-      FROM attendance_results WHERE date = ?
+        COUNT(DISTINCT ar.user_id) as totalAttendees,
+        SUM(CASE WHEN ar.status = 'normal' THEN 1 ELSE 0 END) as normalCount,
+        SUM(CASE WHEN ar.status = 'late' THEN 1 ELSE 0 END) as lateCount,
+        SUM(CASE WHEN ar.status = 'absent' THEN 1 ELSE 0 END) as absentCount,
+        SUM(CASE WHEN ar.status = 'leave' THEN 1 ELSE 0 END) as leaveCount,
+        SUM(CASE WHEN ar.status = 'early_leave' THEN 1 ELSE 0 END) as earlyLeaveCount
+      FROM attendance_results ar
+      JOIN users u ON ar.user_id = u.id
+      WHERE ar.date = ? AND u.role != 'admin'
     `, [dateStr]);
 
     const [absentUsers] = await db.query(`
       SELECT u.name FROM attendance_results ar
       JOIN users u ON ar.user_id = u.id
-      WHERE ar.date = ? AND ar.status = 'absent'
+      WHERE ar.date = ? AND ar.status = 'absent' AND u.role != 'admin'
     `, [dateStr]);
 
     const [projects] = await db.query(`
