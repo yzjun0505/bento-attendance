@@ -155,7 +155,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     final items = <TimelineItem>[];
 
     for (final c in checkins) {
-      final isIn = c.type == 'in';
+      final isIn = c.type == 'in' || c.type == 'clock_in';
       items.add(TimelineItem(
         time: DateFormat('HH:mm').format(c.createdAt),
         title: isIn ? '上班打卡' : '下班打卡',
