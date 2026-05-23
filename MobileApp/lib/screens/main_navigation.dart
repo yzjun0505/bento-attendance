@@ -12,7 +12,8 @@ import '../repositories/app_update_repository.dart';
 import '../api/dio_client.dart';
 import '../widgets/app_update_dialog.dart';
 import '../widgets/offline_banner.dart';
-import 'chat/tuikit_chat_screen.dart';
+import 'package:tencent_chat_uikit/conversations_page.dart';
+import 'package:tencent_chat_uikit/contacts_page.dart';
 import 'attendance/map_dashboard_screen.dart';
 import 'history/history_screen.dart';
 import 'profile/profile_screen.dart';
@@ -79,11 +80,11 @@ class MainNavigationState extends State<MainNavigation> {
                     // TUIKit 页面需要等 IM 登录完成后才能渲染，
                     // 否则 ConversationsPage/ContactsPage 在未登录状态下会闪退
                     if (isIMReady)
-                      const TUIKitConversationsScreen()
+                      const ConversationsPage()
                     else
                       const _IMLoadingPlaceholder(label: '消息'),
                     if (isIMReady)
-                      const TUIKitContactsScreen()
+                      const ContactsPage()
                     else
                       const _IMLoadingPlaceholder(label: '通讯录'),
                     const MapDashboardScreen(),
