@@ -1,12 +1,18 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:uuid/uuid.dart';
 import '../../core/bento_colors.dart';
 import '../../core/bento_typography.dart';
 import '../../blocs/progress/progress_bloc.dart';
+import '../../blocs/auth/auth_bloc.dart';
+import '../../blocs/auth/auth_state.dart';
 import '../../models/task_node_model.dart';
 import '../../repositories/progress_repository.dart';
+import '../../utils/watermark_service.dart';
+import '../../utils/coord_utils.dart';
 
 class SubmitProgressScreen extends StatefulWidget {
   final TaskNode node;
@@ -48,10 +54,54 @@ class _SubmitProgressScreenState extends State<SubmitProgressScreen> {
       maxHeight: 1920,
       imageQuality: 85,
     );
-    if (pickedFile != null) {
-      setState(() {
-        _photos.add(File(pickedFile.path));
-      });
+    if (pickedFile == null) return;
+
+    // 给进度照片添加水印
+    try {
+      final watermarked = await _addWatermark(File(pickedFile.path));
+      if (watermarked != null && mounted) {
+        setState(() => _photos.add(watermarked));
+      }
+    } catch (_) {
+      // 水印失败，仍保留原图
+      if (mounted) setState(() => _photos.add(File(pickedFile.path)));
+    }
+  }
+
+  Future<File?> _addWatermark(File rawFile) async {
+    try {
+      final authState = context.read<AuthBloc>().state;
+      if (authState is! AuthAuthenticated) return null;
+
+      // 获取当前位置
+      double lat = 0, lng = 0;
+      try {
+        final pos = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 8),
+        );
+        final gcj = CoordUtils.wgs84ToGcj02(pos.latitude, pos.longitude);
+        lat = gcj['latitude']!;
+        lng = gcj['longitude']!;
+      } catch (_) {}
+
+      // 生成防伪码
+      final code = const Uuid().v4().substring(0, 16).toUpperCase();
+
+      return await WatermarkService.addWatermark(
+        imageFile: rawFile,
+        userName: authState.user.name,
+        projectName: widget.node.title,
+        latitude: lat,
+        longitude: lng,
+        timestamp: DateTime.now(),
+        watermarkCode: code,
+        customName: '进度上报',
+        workContent:
+            '${widget.node.title} ${_progressPercent.round()}% ${_descController.text.trim()}',
+      );
+    } catch (_) {
+      return null;
     }
   }
 
@@ -141,7 +191,7 @@ class _SubmitProgressScreenState extends State<SubmitProgressScreen> {
             children: [
               ListTile(
                 leading: const Icon(Icons.camera_alt),
-                title: const Text('拍照'),
+                title: const Text('水印拍照'),
                 onTap: () {
                   Navigator.pop(context);
                   _pickImage(ImageSource.camera);
@@ -390,7 +440,7 @@ class _SubmitProgressScreenState extends State<SubmitProgressScreen> {
               ),
               const SizedBox(height: BentoSpacing.space24),
               Text(
-                '现场照片（可选）',
+                '现场照片（水印拍照，可选）',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       color: colors.textPrimary,
                       fontWeight: FontWeight.w600,
@@ -473,7 +523,7 @@ class _SubmitProgressScreenState extends State<SubmitProgressScreen> {
                               size: 32, color: colors.textTertiary),
                           const SizedBox(height: 4),
                           Text(
-                            '点击拍照或选择图片',
+                            '水印拍照记录现场',
                             style: Theme.of(context)
                                 .textTheme
                                 .bodySmall
