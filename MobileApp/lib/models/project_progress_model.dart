@@ -28,18 +28,19 @@ class ProjectProgress {
   });
 
   factory ProjectProgress.fromJson(Map<String, dynamic> json) {
+    int _int(dynamic v) => v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
     return ProjectProgress(
-      id: json['id'] ?? 0,
+      id: _int(json['id']),
       name: json['name'] ?? '',
       address: json['address'],
-      overallProgress: json['overallProgress'] ?? 0,
-      totalNodes: json['totalNodes'] ?? 0,
-      completedNodes: json['completedNodes'] ?? 0,
-      inProgressNodes: json['inProgressNodes'] ?? 0,
-      overdueNodes: json['overdueNodes'] ?? 0,
-      pausedNodes: json['pausedNodes'] ?? 0,
+      overallProgress: _int(json['overallProgress']),
+      totalNodes: _int(json['totalNodes']),
+      completedNodes: _int(json['completedNodes']),
+      inProgressNodes: _int(json['inProgressNodes']),
+      overdueNodes: _int(json['overdueNodes']),
+      pausedNodes: _int(json['pausedNodes']),
       lastReportTime: json['lastReportTime'],
-      assigneeCount: json['assigneeCount'] ?? 0,
+      assigneeCount: _int(json['assigneeCount']),
     );
   }
 }
@@ -70,15 +71,16 @@ class ProjectProgressSummary {
   });
 
   factory ProjectProgressSummary.fromJson(Map<String, dynamic> json) {
+    int _int(dynamic v) => v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
     return ProjectProgressSummary(
-      projectId: json['projectId'] ?? 0,
+      projectId: _int(json['projectId']),
       projectName: json['projectName'] ?? '',
-      overallProgress: json['overallProgress'] ?? 0,
-      totalNodes: json['totalNodes'] ?? 0,
-      completedNodes: json['completedNodes'] ?? 0,
-      inProgressNodes: json['inProgressNodes'] ?? 0,
-      overdueNodes: json['overdueNodes'] ?? 0,
-      pausedNodes: json['pausedNodes'] ?? 0,
+      overallProgress: _int(json['overallProgress']),
+      totalNodes: _int(json['totalNodes']),
+      completedNodes: _int(json['completedNodes']),
+      inProgressNodes: _int(json['inProgressNodes']),
+      overdueNodes: _int(json['overdueNodes']),
+      pausedNodes: _int(json['pausedNodes']),
       phases: json['phases'] != null
           ? (json['phases'] as List)
               .map((e) => PhaseStat.fromJson(e as Map<String, dynamic>))
@@ -109,12 +111,13 @@ class PhaseStat {
   });
 
   factory PhaseStat.fromJson(Map<String, dynamic> json) {
+    int _int(dynamic v) => v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
     return PhaseStat(
       phase: json['phase'] ?? '',
       label: json['label'] ?? '',
-      nodeCount: json['nodeCount'] ?? 0,
-      completedCount: json['completedCount'] ?? 0,
-      completionRate: json['completionRate'] ?? 0,
+      nodeCount: _int(json['nodeCount']),
+      completedCount: _int(json['completedCount']),
+      completionRate: _int(json['completionRate']),
     );
   }
 }
@@ -147,11 +150,12 @@ class RecentReport {
   });
 
   factory RecentReport.fromJson(Map<String, dynamic> json) {
+    int _int(dynamic v) => v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
     return RecentReport(
-      id: json['id'] ?? 0,
-      nodeId: json['nodeId'] ?? 0,
+      id: _int(json['id']),
+      nodeId: _int(json['nodeId']),
       description: json['description'],
-      progressPercent: json['progressPercent'] ?? 0,
+      progressPercent: _int(json['progressPercent']),
       riskNote: json['riskNote'],
       blockerNote: json['blockerNote'],
       reporterName: json['reporterName'],

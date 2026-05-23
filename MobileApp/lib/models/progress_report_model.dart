@@ -28,14 +28,15 @@ class ProgressReport {
   });
 
   factory ProgressReport.fromJson(Map<String, dynamic> json) {
+    int _int(dynamic v) => v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
     return ProgressReport(
-      id: json['id'],
-      nodeId: json['node_id'],
-      reporterId: json['reporter_id'],
+      id: _int(json['id']),
+      nodeId: _int(json['node_id']),
+      reporterId: _int(json['reporter_id']),
       reporterName: json['reporter_name'],
       description: json['description'],
       photo: json['photo'],
-      progressPercent: json['progress_percent'] ?? 0,
+      progressPercent: _int(json['progress_percent']),
       createdAt: json['created_at'] ?? '',
       riskNote: json['risk_note'],
       blockerNote: json['blocker_note'],

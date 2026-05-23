@@ -38,23 +38,24 @@ class TaskNode {
   });
 
   factory TaskNode.fromJson(Map<String, dynamic> json) {
+    int _int(dynamic v) => v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
     return TaskNode(
-      id: json['id'],
-      projectId: json['project_id'],
+      id: _int(json['id']),
+      projectId: _int(json['project_id']),
       title: json['title'] ?? '',
       description: json['description'],
       plannedDate: json['planned_date'],
-      assigneeId: json['assignee_id'],
+      assigneeId: json['assignee_id'] != null ? _int(json['assignee_id']) : null,
       assigneeName: json['assignee_name'],
       status: json['status'] ?? 'pending',
-      progressPercent: json['progress_percent'] ?? 0,
+      progressPercent: _int(json['progress_percent']),
       createdAt: json['created_at'] ?? '',
       updatedAt: json['updated_at'] ?? '',
       phase: json['phase'],
       planStartDate: json['plan_start_date'],
       planEndDate: json['plan_end_date'],
       priority: json['priority'],
-      sortOrder: json['sort_order'] ?? 0,
+      sortOrder: _int(json['sort_order']),
     );
   }
 
