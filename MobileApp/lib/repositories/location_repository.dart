@@ -38,4 +38,18 @@ class LocationRepository {
       return false;
     }
   }
+
+  /// 获取团队位置（经理/管理员查看授权项目下工人的最新位置）
+  Future<Map<String, dynamic>> getTeamLocations() async {
+    try {
+      final response = await apiClient.dio.get('/location/team-locations');
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return response.data['data'] as Map<String, dynamic>;
+      }
+      return {'locations': [], 'total': 0};
+    } catch (e) {
+      debugPrint('获取团队位置失败: $e');
+      return {'locations': [], 'total': 0};
+    }
+  }
 }

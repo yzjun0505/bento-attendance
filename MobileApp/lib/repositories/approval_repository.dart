@@ -79,4 +79,17 @@ class ApprovalRepository {
       rethrow;
     }
   }
+
+  /// 获取单条审批详情（含关联打卡记录）
+  Future<Map<String, dynamic>?> getApprovalById(int approvalId, {String? token}) async {
+    try {
+      final response = await _dio.get('/approvals/$approvalId');
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return response.data['data'] as Map<String, dynamic>;
+      }
+      return null;
+    } catch (e) {
+      rethrow;
+    }
+  }
 }

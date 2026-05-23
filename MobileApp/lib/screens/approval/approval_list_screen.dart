@@ -5,6 +5,7 @@ import '../../repositories/approval_repository.dart';
 import '../../blocs/auth/auth_bloc.dart';
 import '../../blocs/auth/auth_state.dart';
 import '../../widgets/bento_empty_state.dart';
+import 'approval_detail_screen.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class ApprovalListScreen extends StatefulWidget {
@@ -203,7 +204,16 @@ class _ApprovalListScreenState extends State<ApprovalListScreen>
         typeText = type;
     }
 
-    return Container(
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ApprovalDetailScreen(approvalId: approval['id']),
+          ),
+        ).then((_) => _loadData());
+      },
+      child: Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -306,6 +316,7 @@ class _ApprovalListScreenState extends State<ApprovalListScreen>
           ],
         ],
       ),
+    ),
     );
   }
 

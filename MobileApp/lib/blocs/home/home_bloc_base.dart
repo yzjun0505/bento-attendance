@@ -36,6 +36,8 @@ class TimelineItem extends Equatable {
   final String subtitle;
   final IconData icon;
   final Color color;
+  final int? sourceId;
+  final String sourceType; // 'checkin' | 'notification' | 'approval'
 
   const TimelineItem({
     required this.time,
@@ -43,10 +45,12 @@ class TimelineItem extends Equatable {
     required this.subtitle,
     required this.icon,
     required this.color,
+    this.sourceId,
+    this.sourceType = 'checkin',
   });
 
   @override
-  List<Object?> get props => [time, title, subtitle];
+  List<Object?> get props => [time, title, subtitle, sourceId, sourceType];
 }
 
 class HomeSummaryLoaded extends HomeState {

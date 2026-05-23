@@ -374,6 +374,52 @@ async function rejectApproval(req, res) {
   }
 }
 
+/**
+ * 获取单条审批详情（含关联打卡记录）
+ * GET /api/approvals/:id
+ */
+async function getApprovalById(req, res) {
+  try {
+    const db = getPool();
+    const [rows] = await db.execute(
+      `SELECT ar.*, u.name as user_name, u.username, u.phone,
+              p.name as project_name, appr.name as approver_name
+       FROM approval_requests ar
+       LEFT JOIN users u ON ar.user_id = u.id
+       LEFT JOIN projects p ON u.project_id = p.id
+       LEFT JOIN users appr ON ar.approver_id = appr.id
+       WHERE ar.id = ?`,
+      [req.params.id]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json(errorResponse('审批单不存在', 404));
+    }
+
+    const approval = rows[0];
+
+    // 如果关联了打卡记录，查询详情
+    let checkin = null;
+    if (approval.checkin_id) {
+      const [cRows] = await db.query(
+        `SELECT c.*, u2.name as user_name
+         FROM checkins c
+         LEFT JOIN users u2 ON c.user_id = u2.id
+         WHERE c.id = ?`,
+        [approval.checkin_id]
+      );
+      if (cRows.length > 0) checkin = cRows[0];
+    }
+
+    res.json(successResponse({
+      ...approval,
+      checkin,
+    }));
+  } catch (err) {
+    logger.error('获取审批详情失败', { error: err.message });
+    res.status(500).json(errorResponse('服务器错误'));
+  }
+}
+
 async function deleteApproval(req, res) {
   try {
     const db = getPool();
@@ -410,6 +456,7 @@ module.exports = {
   getPendingApprovals,
   getMyApprovals,
   getAllApprovals,
+  getApprovalById,
   approveApproval,
   rejectApproval,
   deleteApproval

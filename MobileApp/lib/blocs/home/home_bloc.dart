@@ -162,6 +162,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         subtitle: c.address.isNotEmpty ? c.address : (c.projectName ?? '打卡成功'),
         icon: isIn ? Icons.login_rounded : Icons.logout_rounded,
         color: isIn ? const Color(0xFF3B82F6) : const Color(0xFF10B981),
+        sourceId: c.id,
+        sourceType: 'checkin',
       ));
     }
 
@@ -176,6 +178,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         color: n.type == 'approval'
             ? const Color(0xFFF59E0B)
             : const Color(0xFF8B5CF6),
+        sourceId: n.id,
+        sourceType: n.type == 'approval' ? 'approval' : 'notification',
       ));
     }
 

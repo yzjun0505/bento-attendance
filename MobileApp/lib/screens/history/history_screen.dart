@@ -324,6 +324,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
         }
 
         final timelineItems = state.timelineItems;
+        const maxVisible = 2;
+        final visibleItems = timelineItems.length > maxVisible
+            ? timelineItems.sublist(0, maxVisible)
+            : timelineItems;
 
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: BentoSpacing.space20),
@@ -372,8 +376,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ],
               ),
               const SizedBox(height: BentoSpacing.space12),
-              // 动态列表
-              if (timelineItems.isEmpty)
+              // 动态列表（最多显示2条）
+              if (visibleItems.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(
                       vertical: BentoSpacing.space16),
@@ -386,9 +390,107 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     ),
                   ),
                 )
-              else
-                ...timelineItems
-                    .map((item) => _buildTimelineItem(item, colors, theme)),
+              else ...[
+                ...visibleItems
+                    .map((item) => GestureDetector(
+                          onTap: () => _openTimelineDetail(context, item),
+                          child:
+                              _buildTimelineItem(item, colors, theme),
+                        )),
+                // 查看全部按钮
+                if (timelineItems.length > maxVisible)
+                  GestureDetector(
+                    onTap: () => _openAllTimeline(context, timelineItems, colors, theme),
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 8),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: colors.surfaceVariant,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Center(
+                        child: Text(
+                          '查看全部 ${timelineItems.length} 条动态',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colors.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _openTimelineDetail(BuildContext context, TimelineItem item) {
+    if (item.sourceType == 'checkin' && item.sourceId != null) {
+      Navigator.pushNamed(context, '/my_checkins');
+    } else if (item.sourceType == 'notification' && item.sourceId != null) {
+      Navigator.pushNamed(context, '/notifications');
+    } else if (item.sourceType == 'approval' && item.sourceId != null) {
+      Navigator.pushNamed(context, '/approval');
+    }
+  }
+
+  void _openAllTimeline(BuildContext context, List<TimelineItem> items,
+      BentoColors colors, ThemeData theme) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: colors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(BentoRadius.lg)),
+      ),
+      builder: (ctx) {
+        return Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(ctx).size.height * 0.7,
+          ),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).padding.bottom,
+            top: 16,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: colors.textTertiary.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                '今日动态 (${items.length})',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: colors.textPrimary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  itemCount: items.length,
+                  itemBuilder: (context, index) {
+                    final item = items[index];
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _openTimelineDetail(context, item);
+                      },
+                      child: _buildTimelineItem(item, colors, theme),
+                    );
+                  },
+                ),
+              ),
             ],
           ),
         );
@@ -467,6 +569,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
       'description': '查看个人打卡记录',
       'color': const Color(0xFF3B82F6),
       'route': '/my_checkins',
+    });
+
+    // 请假入口 — 所有人可见
+    features.add({
+      'icon': Icons.beach_access_outlined,
+      'title': '申请请假',
+      'description': '提交请假审批',
+      'color': const Color(0xFF06B6D4),
+      'route': '/approval/create?type=请假',
     });
 
     if (role == 'worker') {
@@ -548,6 +659,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 onTap: () {
                   if (title == '项目进度') {
                     Navigator.pushNamed(context, '/progress_workbench');
+                  } else if (title == '申请请假') {
+                    Navigator.pushNamed(context, '/approval/create',
+                        arguments: {'type': '请假'});
                   } else if (route != null) {
                     Navigator.pushNamed(context, route);
                   }

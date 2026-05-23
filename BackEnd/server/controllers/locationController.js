@@ -3,6 +3,7 @@
  */
 const { getPool } = require('../models/db');
 const { successResponse, errorResponse, parsePagination } = require('../utils/helpers');
+const { getAccessibleUserIds } = require('../middleware/authScope');
 const logger = require('../utils/logger');
 
 /**
@@ -184,4 +185,67 @@ async function getOnlineCount(req, res) {
   }
 }
 
-module.exports = { reportLocation, getLatestLocations, getLocationHistory, getOnlineCount };
+/**
+ * 获取团队位置（经理查看自己授权项目下工人的最新位置）
+ * GET /api/location/team-locations
+ */
+async function getTeamLocations(req, res) {
+  try {
+    const db = getPool();
+    const role = req.user.role;
+
+    // 仅经理和管理员可查看团队位置
+    if (role === 'worker') {
+      return res.status(403).json(errorResponse('无权查看团队位置', 403));
+    }
+
+    const userIds = await getAccessibleUserIds(req);
+    if (userIds.length === 0) {
+      return res.json(successResponse({ locations: [] }));
+    }
+
+    // 获取每个人最新一条位置记录
+    const placeholders = userIds.map(() => '?').join(',');
+    const [rows] = await db.query(`
+      SELECT l.user_id, l.latitude, l.longitude, l.accuracy, l.address,
+             l.created_at, u.name as user_name, u.role, u.avatar,
+             p.id as project_id, p.name as project_name
+      FROM (
+        SELECT user_id, MAX(created_at) as max_time
+        FROM locations
+        WHERE user_id IN (${placeholders})
+        GROUP BY user_id
+      ) latest
+      JOIN locations l ON l.user_id = latest.user_id AND l.created_at = latest.max_time
+      JOIN users u ON l.user_id = u.id
+      LEFT JOIN projects p ON u.project_id = p.id
+      ORDER BY u.name
+    `, userIds);
+
+    // 过滤掉超过30分钟的旧位置
+    const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000);
+    const activeLocations = rows.filter(r => new Date(r.created_at) > thirtyMinAgo);
+
+    res.json(successResponse({
+      locations: activeLocations.map(r => ({
+        userId: r.user_id,
+        name: r.user_name,
+        role: r.role,
+        avatar: r.avatar,
+        latitude: r.latitude,
+        longitude: r.longitude,
+        accuracy: r.accuracy,
+        address: r.address,
+        updatedAt: r.created_at,
+        projectId: r.project_id,
+        projectName: r.project_name,
+      })),
+      total: activeLocations.length,
+    }));
+  } catch (err) {
+    logger.error('获取团队位置失败', { error: err.message });
+    res.status(500).json(errorResponse('服务器错误'));
+  }
+}
+
+module.exports = { reportLocation, getLatestLocations, getLocationHistory, getOnlineCount, getTeamLocations };

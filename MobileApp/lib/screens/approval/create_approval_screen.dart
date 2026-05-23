@@ -26,9 +26,15 @@ class _CreateApprovalScreenState extends State<CreateApprovalScreen> {
   final List<String> _approvalTypes = ['补卡', '请假', '加班'];
 
   @override
-  void dispose() {
-    _reasonController.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    // 支持从路由参数预选类型（如从工作台请假入口进入）
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final args = ModalRoute.of(context)?.settings.arguments;
+      if (args is Map && args['type'] != null) {
+        setState(() => _approvalType = args['type'] as String);
+      }
+    });
   }
 
   Future<void> _selectStartDate() async {
