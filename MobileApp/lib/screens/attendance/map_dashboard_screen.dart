@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../core/bento_colors.dart';
 import '../../core/bento_typography.dart';
@@ -7,6 +8,8 @@ import '../../widgets/amap_webview.dart';
 import '../../blocs/attendance/attendance_bloc.dart';
 import '../../blocs/attendance/attendance_state.dart';
 import '../../blocs/attendance/attendance_event.dart';
+import '../../blocs/auth/auth_bloc.dart';
+import '../../blocs/auth/auth_state.dart';
 import '../../utils/coord_utils.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -266,174 +269,7 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
                         BentoSpacing.space20,
                         BentoSpacing.space8,
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // 今日排班卡片
-                          if (state is AttendanceLoaded &&
-                              state.todayShiftName != null)
-                            Container(
-                              width: double.infinity,
-                              margin: const EdgeInsets.only(bottom: 12),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: (state.todayShiftColor != null
-                                        ? Color(int.parse(state.todayShiftColor!
-                                            .replaceFirst('#', '0xFF')))
-                                        : colors.primary)
-                                    .withValues(alpha: 0.08),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: (state.todayShiftColor != null
-                                          ? Color(int.parse(state
-                                              .todayShiftColor!
-                                              .replaceFirst('#', '0xFF')))
-                                          : colors.primary)
-                                      .withValues(alpha: 0.2),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 6,
-                                    height: 32,
-                                    decoration: BoxDecoration(
-                                      color: state.todayShiftColor != null
-                                          ? Color(int.parse(state
-                                              .todayShiftColor!
-                                              .replaceFirst('#', '0xFF')))
-                                          : colors.primary,
-                                      borderRadius: BorderRadius.circular(3),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          '今日排班：${state.todayShiftName}',
-                                          style: theme.textTheme.bodyMedium
-                                              ?.copyWith(
-                                            color: colors.textPrimary,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                        Text(
-                                          '${state.todayShiftStart ?? '--:--'} - ${state.todayShiftEnd ?? '--:--'}',
-                                          style: theme.textTheme.bodySmall
-                                              ?.copyWith(
-                                            color: colors.textSecondary,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          Row(
-                            children: [
-                              Container(
-                                width: 4,
-                                height: 18,
-                                decoration: BoxDecoration(
-                                  color: colors.primary,
-                                  borderRadius: BorderRadius.circular(2),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                '今日考勤',
-                                style: theme.textTheme.titleSmall?.copyWith(
-                                  color: colors.textPrimary,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              if (state is AttendanceLoaded &&
-                                  state.attendanceGroupName != null &&
-                                  state.attendanceGroupName!.isNotEmpty) ...[
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color:
-                                        colors.primary.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    state.attendanceGroupName!,
-                                    style: theme.textTheme.labelSmall?.copyWith(
-                                      color: colors.primary,
-                                      fontSize: 10,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Expanded(
-                                child: _buildCheckinCard(
-                                  key: const ValueKey('checkin_clock_in'),
-                                  context: context,
-                                  title: '上班',
-                                  time: state is AttendanceLoaded
-                                      ? state.clockInTimeText
-                                      : '未打卡',
-                                  scheduledTime: state is AttendanceLoaded
-                                      ? state.workStartTime
-                                      : null,
-                                  isCompleted: state is AttendanceLoaded &&
-                                      state.isClockInCompleted,
-                                  isSubmitting: state is AttendanceLoaded &&
-                                      state.isSubmitting,
-                                  enabled: state is AttendanceLoaded &&
-                                      !state.isClockInCompleted,
-                                  colors: colors,
-                                  theme: theme,
-                                  onTap: () =>
-                                      _handleCheckin(context, 'clock_in'),
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              _buildBigPhotoButton(
-                                  context, state, colors, theme),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: _buildCheckinCard(
-                                  key: const ValueKey('checkin_clock_out'),
-                                  context: context,
-                                  title: '下班',
-                                  time: state is AttendanceLoaded
-                                      ? state.clockOutTimeText
-                                      : '未打卡',
-                                  scheduledTime: state is AttendanceLoaded
-                                      ? state.workEndTime
-                                      : null,
-                                  isCompleted: state is AttendanceLoaded &&
-                                      state.isClockOutCompleted,
-                                  isSubmitting: state is AttendanceLoaded &&
-                                      state.isSubmitting,
-                                  enabled: state is AttendanceLoaded &&
-                                      state.isClockInCompleted &&
-                                      !state.isClockOutCompleted,
-                                  colors: colors,
-                                  theme: theme,
-                                  onTap: () =>
-                                      _handleCheckin(context, 'clock_out'),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                      child: _buildCheckinSection(context, state, colors, theme),
                     ),
                     // 底部安全区
                     SizedBox(height: mediaQuery.padding.bottom),
@@ -862,6 +698,154 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
           ),
         );
       },
+    );
+  }
+
+  Widget _buildCheckinSection(BuildContext context, AttendanceState state,
+      BentoColors colors, ThemeData theme) {
+    final authState = context.read<AuthBloc>().state;
+    final role = authState is AuthAuthenticated ? authState.user.role : 'worker';
+    final isAdmin = role == 'admin';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // 今日排班卡片
+        if (state is AttendanceLoaded && state.todayShiftName != null)
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: (state.todayShiftColor != null
+                      ? Color(int.parse(
+                          state.todayShiftColor!.replaceFirst('#', '0xFF')))
+                      : colors.primary)
+                  .withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: (state.todayShiftColor != null
+                        ? Color(int.parse(
+                            state.todayShiftColor!.replaceFirst('#', '0xFF')))
+                        : colors.primary)
+                    .withValues(alpha: 0.2),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 6, height: 32,
+                  decoration: BoxDecoration(
+                    color: state.todayShiftColor != null
+                        ? Color(int.parse(
+                            state.todayShiftColor!.replaceFirst('#', '0xFF')))
+                        : colors.primary,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('今日排班：${state.todayShiftName}',
+                          style: theme.textTheme.bodyMedium
+                              ?.copyWith(color: colors.textPrimary, fontWeight: FontWeight.w600)),
+                      Text('${state.todayShiftStart ?? '--:--'} - ${state.todayShiftEnd ?? '--:--'}',
+                          style: theme.textTheme.bodySmall?.copyWith(color: colors.textSecondary)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+        if (isAdmin)
+          // 管理员：显示管理视图提示
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              color: colors.primaryLight.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.admin_panel_settings, size: 20, color: colors.primary),
+                const SizedBox(width: 8),
+                Text('管理员视图 · 监督模式',
+                    style: theme.textTheme.bodySmall?.copyWith(color: colors.primary)),
+              ],
+            ),
+          )
+        else ...[
+          // 普通用户：打卡区域
+          Row(
+            children: [
+              Container(
+                width: 4, height: 18,
+                decoration: BoxDecoration(
+                  color: colors.primary, borderRadius: BorderRadius.circular(2)),
+              ),
+              const SizedBox(width: 8),
+              Text('今日考勤',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                      color: colors.textPrimary, fontWeight: FontWeight.w600)),
+              if (state is AttendanceLoaded &&
+                  state.attendanceGroupName != null &&
+                  state.attendanceGroupName!.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: colors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(state.attendanceGroupName!,
+                      style: theme.textTheme.labelSmall
+                          ?.copyWith(color: colors.primary, fontSize: 10)),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Expanded(
+                child: _buildCheckinCard(
+                  key: const ValueKey('checkin_clock_in'),
+                  context: context, title: '上班',
+                  time: state is AttendanceLoaded ? state.clockInTimeText : '未打卡',
+                  scheduledTime: state is AttendanceLoaded ? state.workStartTime : null,
+                  isCompleted: state is AttendanceLoaded && state.isClockInCompleted,
+                  isSubmitting: state is AttendanceLoaded && state.isSubmitting,
+                  enabled: state is AttendanceLoaded && !state.isClockInCompleted,
+                  colors: colors, theme: theme,
+                  onTap: () => _handleCheckin(context, 'clock_in'),
+                ),
+              ),
+              const SizedBox(width: 16),
+              _buildBigPhotoButton(context, state, colors, theme),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildCheckinCard(
+                  key: const ValueKey('checkin_clock_out'),
+                  context: context, title: '下班',
+                  time: state is AttendanceLoaded ? state.clockOutTimeText : '未打卡',
+                  scheduledTime: state is AttendanceLoaded ? state.workEndTime : null,
+                  isCompleted: state is AttendanceLoaded && state.isClockOutCompleted,
+                  isSubmitting: state is AttendanceLoaded && state.isSubmitting,
+                  enabled: state is AttendanceLoaded &&
+                      state.isClockInCompleted && !state.isClockOutCompleted,
+                  colors: colors, theme: theme,
+                  onTap: () => _handleCheckin(context, 'clock_out'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
     );
   }
 
