@@ -210,4 +210,89 @@ void main() {
       expect(result!.rect.width, lessThan(defaultCardWidth(testSize)));
     });
   });
+
+  group('font auto-scaling', () {
+    /// Helper: run paint() and return the rendered card rect.
+    WatermarkRenderResult? renderCard(
+      Size size,
+      WatermarkTemplate template,
+      Map<String, String> data, {
+      Offset normalizedOffset = const Offset(0.08, 0.68),
+      double scale = 1,
+    }) {
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      return WatermarkRenderer.paint(
+        canvas: canvas,
+        size: size,
+        template: template,
+        data: data,
+        normalizedOffset: normalizedOffset,
+        scale: scale,
+      );
+    }
+
+    test('very long address auto-scales down and renders a valid card', () {
+      // 300-char address that would overflow 2 lines at default 14px
+      final longAddress = '广东省深圳市南山区粤海街道科技园' * 20;
+      final data = {
+        'timeFull': '2026/05/25 14:30:00',
+        'addressDetail': longAddress,
+        'antiFakeCode': 'ABCD-EFGH-IJKL-MNOP',
+        'userName': '测试用户',
+      };
+      final template = WatermarkTemplate(
+        id: 'test-autoscale',
+        name: 'test',
+        category: WatermarkCategory.general,
+        defaultStyle: WatermarkStyle.bottomLeft,
+        fields: const [
+          WatermarkFieldType.addressDetail,
+          WatermarkFieldType.userName,
+        ],
+      );
+
+      const testSize = Size(390, 800);
+      final result = renderCard(testSize, template, data);
+
+      expect(result, isNotNull);
+      // Card should exist and be within image bounds
+      expect(result!.rect.top, greaterThanOrEqualTo(0.0));
+      expect(result.rect.bottom, lessThanOrEqualTo(testSize.height));
+      expect(result.rect.left, greaterThanOrEqualTo(0.0));
+      expect(result.rect.right, lessThanOrEqualTo(testSize.width));
+      // Card should have positive dimensions
+      expect(result.rect.width, greaterThan(0.0));
+      expect(result.rect.height, greaterThan(0.0));
+    });
+
+    test('short address renders at normal font size', () {
+      final data = {
+        'timeFull': '2026/05/25 14:30:00',
+        'addressDetail': '贵州省遵义市',
+        'antiFakeCode': 'ABCD-EFGH-IJKL-MNOP',
+        'userName': '测试用户',
+      };
+      final template = WatermarkTemplate(
+        id: 'test-short-auto',
+        name: 'test',
+        category: WatermarkCategory.general,
+        defaultStyle: WatermarkStyle.bottomLeft,
+        fields: const [
+          WatermarkFieldType.addressDetail,
+          WatermarkFieldType.userName,
+        ],
+      );
+
+      const testSize = Size(390, 800);
+      final result = renderCard(testSize, template, data);
+
+      expect(result, isNotNull);
+      // Card should have positive dimensions
+      expect(result!.rect.width, greaterThan(0.0));
+      expect(result.rect.height, greaterThan(0.0));
+      // Right edge within bounds
+      expect(result.rect.right, lessThanOrEqualTo(testSize.width));
+    });
+  });
 }

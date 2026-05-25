@@ -338,26 +338,29 @@ class WatermarkRenderer {
     final painters = <TextPainter>[];
     double cardHeight = padding * 2;
     for (final line in lines) {
-      final fontSize = _lineFontSize(template, line) * renderScale;
-      final painter = _createTextPainter(
+      final baseFontSize = _lineFontSize(template, line) * renderScale;
+      final baseStyle = TextStyle(
+        color: line.color ?? template.textColor,
+        fontSize: baseFontSize,
+        fontWeight: line.isTitle ? FontWeight.bold : FontWeight.w500,
+        shadows: [
+          Shadow(
+            color: Colors.black.withValues(alpha: 0.5),
+            blurRadius: 2 * renderScale,
+          ),
+        ],
+      );
+      final painter = _createAutoScaledTextPainter(
         line.text,
-        TextStyle(
-          color: line.color ?? template.textColor,
-          fontSize: fontSize,
-          fontWeight: line.isTitle ? FontWeight.bold : FontWeight.w500,
-          shadows: [
-            Shadow(
-              color: Colors.black.withValues(alpha: 0.5),
-              blurRadius: 2 * renderScale,
-            ),
-          ],
-        ),
+        baseStyle,
         maxTextWidth,
         maxLines: 2,
       );
       painters.add(painter);
+      final actualFontSize =
+          painter.text?.style?.fontSize ?? baseFontSize;
       cardHeight +=
-          painter.height + fontSize * (layout.lineHeight - 1).clamp(0.0, 1.4);
+          painter.height + actualFontSize * (layout.lineHeight - 1).clamp(0.0, 1.4);
     }
 
     double x = template.defaultStyle == WatermarkStyle.bottomBar
@@ -386,26 +389,29 @@ class WatermarkRenderer {
           painters.clear();
           cardHeight = padding * 2;
           for (final line in lines) {
-            final fontSize = _lineFontSize(template, line) * renderScale;
-            final painter = _createTextPainter(
+            final baseFontSize = _lineFontSize(template, line) * renderScale;
+            final baseStyle = TextStyle(
+              color: line.color ?? template.textColor,
+              fontSize: baseFontSize,
+              fontWeight: line.isTitle ? FontWeight.bold : FontWeight.w500,
+              shadows: [
+                Shadow(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  blurRadius: 2 * renderScale,
+                ),
+              ],
+            );
+            final painter = _createAutoScaledTextPainter(
               line.text,
-              TextStyle(
-                color: line.color ?? template.textColor,
-                fontSize: fontSize,
-                fontWeight: line.isTitle ? FontWeight.bold : FontWeight.w500,
-                shadows: [
-                  Shadow(
-                    color: Colors.black.withValues(alpha: 0.5),
-                    blurRadius: 2 * renderScale,
-                  ),
-                ],
-              ),
+              baseStyle,
               maxTextWidth,
               maxLines: 2,
             );
             painters.add(painter);
+            final actualFontSize =
+                painter.text?.style?.fontSize ?? baseFontSize;
             cardHeight += painter.height +
-                fontSize * (layout.lineHeight - 1).clamp(0.0, 1.4);
+                actualFontSize * (layout.lineHeight - 1).clamp(0.0, 1.4);
           }
           // 卡片高度变化后重新计算 y 位置
           y = size.height * normalizedOffset.dy;
@@ -687,6 +693,34 @@ class WatermarkRenderer {
       maxLines: maxLines,
       ellipsis: maxLines == null ? null : '...',
     )..layout(maxWidth: maxWidth);
+  }
+
+  /// Creates a [TextPainter] that auto-scales font size down so the text
+  /// fits within [maxLines] at [maxWidth]. Starts at the given [baseStyle]
+  /// font size and steps down by 0.5 until it fits or reaches [minFontSize].
+  static TextPainter _createAutoScaledTextPainter(
+    String text,
+    TextStyle baseStyle,
+    double maxWidth, {
+    int maxLines = 2,
+    double minFontSize = 9.0,
+  }) {
+    final initialFontSize = baseStyle.fontSize ?? 14.0;
+    double currentSize = initialFontSize;
+    TextPainter? lastPainter;
+
+    while (currentSize >= minFontSize - 0.01) {
+      final style = baseStyle.copyWith(fontSize: currentSize);
+      final painter = _createTextPainter(text, style, maxWidth, maxLines: maxLines);
+      lastPainter = painter;
+      if (!painter.didExceedMaxLines) {
+        return painter;
+      }
+      currentSize -= 0.5;
+    }
+
+    // Return the last attempt (at minFontSize or just above)
+    return lastPainter!;
   }
 
   static void _withRotation(
