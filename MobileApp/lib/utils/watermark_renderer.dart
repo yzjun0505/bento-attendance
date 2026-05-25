@@ -663,14 +663,10 @@ class WatermarkRenderer {
     }
 
     final rrect = RRect.fromRectAndRadius(rect, Radius.circular(radius));
-    final bgColor = template.skeletonPreset == 'glass'
-        ? Colors.white.withValues(alpha: 0.15)
-        : template.skeletonPreset == 'compact'
-            ? Colors.black.withValues(alpha: 0.6)
-            : template.backgroundColor;
-    canvas.drawRRect(rrect, Paint()..color = bgColor);
-
-    if (template.skeletonPreset == 'glass') {
+    final preset = template.skeletonPreset;
+    if (preset == 'glass') {
+      // White frosted glass
+      canvas.drawRRect(rrect, Paint()..color = Colors.white.withValues(alpha: 0.15));
       canvas.drawRRect(
         rrect,
         Paint()
@@ -678,6 +674,22 @@ class WatermarkRenderer {
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1 * scale,
       );
+    } else if (preset == 'compact') {
+      // Semi-transparent black
+      canvas.drawRRect(rrect, Paint()..color = Colors.black.withValues(alpha: 0.6));
+    } else if (preset == 'default') {
+      // Transparent dark micro-frosted-glass
+      canvas.drawRRect(rrect, Paint()..color = Colors.black.withValues(alpha: 0.2));
+      canvas.drawRRect(
+        rrect,
+        Paint()
+          ..color = Colors.white.withValues(alpha: 0.12)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1 * scale,
+      );
+    } else {
+      // Custom skeletonPreset — fall back to template backgroundColor
+      canvas.drawRRect(rrect, Paint()..color = template.backgroundColor);
     }
   }
 
