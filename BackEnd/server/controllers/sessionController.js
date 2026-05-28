@@ -19,32 +19,39 @@ function generateAccessToken(user) {
   );
 }
 
+function getRefreshExpiresAt() {
+  const expiresIn = config.jwt.refreshExpiresIn;
+  if (typeof expiresIn === 'string') {
+    const match = expiresIn.match(/^(\d+)([dhms])$/);
+    if (match) {
+      const value = parseInt(match[1], 10);
+      const unit = match[2];
+      const now = Date.now();
+      switch (unit) {
+        case 'd':
+          return new Date(now + value * 24 * 60 * 60 * 1000);
+        case 'h':
+          return new Date(now + value * 60 * 60 * 1000);
+        case 'm':
+          return new Date(now + value * 60 * 1000);
+        case 's':
+          return new Date(now + value * 1000);
+        default:
+          break;
+      }
+    }
+  }
+
+  if (typeof expiresIn === 'number') {
+    return new Date(Date.now() + expiresIn * 1000);
+  }
+
+  return new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+}
+
 async function createSession(userId, refreshToken, deviceInfo, ipAddress, platform, deviceId) {
   const db = getPool();
-  const expiresIn = config.jwt.refreshExpiresIn;
-  
-  let expiresAt;
-  if (typeof expiresIn === 'string') {
-    const match = expiresIn.match(/(\d+)([dhms])/);
-    if (match) {
-      const value = parseInt(match[1]);
-      const unit = match[2];
-      const now = new Date();
-      switch (unit) {
-        case 'd': expiresAt = new Date(now.getTime() + value * 24 * 60 * 60 * 1000); break;
-        case 'h': expiresAt = new Date(now.getTime() + value * 60 * 60 * 1000); break;
-        case 'm': expiresAt = new Date(now.getTime() + value * 60 * 1000); break;
-        case 's': expiresAt = new Date(now.getTime() + value * 1000); break;
-        default: expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-      }
-    } else {
-      expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    }
-  } else if (typeof expiresIn === 'number') {
-    expiresAt = new Date(Date.now() + expiresIn * 1000);
-  } else {
-    expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-  }
+  const expiresAt = getRefreshExpiresAt();
 
   const p = platform || 'unknown';
   await db.execute(
@@ -85,9 +92,18 @@ async function refreshToken(req, res) {
     }
 
     const newAccessToken = generateAccessToken(session);
+    const newRefreshToken = generateRefreshToken(session);
+    const expiresAt = getRefreshExpiresAt();
+
+    await db.execute(
+      'UPDATE sessions SET refresh_token = ?, expires_at = ?, updated_at = NOW() WHERE id = ?',
+      [newRefreshToken, expiresAt, session.id]
+    );
 
     res.json(successResponse({ 
-      access_token: newAccessToken 
+      access_token: newAccessToken,
+      refresh_token: newRefreshToken,
+      expires_at: expiresAt
     }, 'Token 刷新成功'));
   } catch (err) {
     console.error('刷新 Token 失败:', err);

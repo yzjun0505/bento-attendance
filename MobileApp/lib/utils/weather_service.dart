@@ -4,7 +4,8 @@ import 'package:dio/dio.dart';
 class WeatherService {
   static const String _baseUrl =
       'https://restapi.amap.com/v3/weather/weatherInfo';
-  static const String _apiKey = String.fromEnvironment('AMAP_KEY', defaultValue: 'ae275848401da60cbf76669fdc22b450');
+  static const String _apiKey = String.fromEnvironment('AMAP_KEY',
+      defaultValue: 'ae275848401da60cbf76669fdc22b450');
 
   static final Dio _dio = Dio(BaseOptions(
     connectTimeout: const Duration(seconds: 3),

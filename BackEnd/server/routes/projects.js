@@ -10,6 +10,7 @@ router.use(authMiddleware);
 
 router.get('/all', projectController.getAllProjects);
 router.get('/nearby', projectController.getNearbyProjects);
+router.get('/authorized', projectController.getAuthorizedProjects);
 router.get('/', managerOrAdmin, projectController.getProjects);
 router.get('/:id', managerOrAdmin, projectController.getProjectById);
 router.post('/', managerOrAdmin, projectController.createProject);

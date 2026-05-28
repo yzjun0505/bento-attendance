@@ -26,4 +26,3 @@ class ChatSettingsState extends Equatable {
   @override
   List<Object?> get props => [use24Hour, isLoaded];
 }
-

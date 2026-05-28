@@ -79,11 +79,58 @@ class AttendanceLoaded extends AttendanceState {
   /// 当前有效的项目名称
   String get activeProjectName {
     if (selectedProjectId != null) {
-      final project = nearbyProjects.where((p) => p.id == selectedProjectId).firstOrNull ??
-          projects.where((p) => p.id == selectedProjectId).firstOrNull;
+      final project =
+          nearbyProjects.where((p) => p.id == selectedProjectId).firstOrNull ??
+              projects.where((p) => p.id == selectedProjectId).firstOrNull;
       return project?.name ?? '未知项目';
     }
     return nearestProject?.name ?? '未关联项目';
+  }
+
+  /// 今日是否已完成上班打卡
+  bool get isClockInCompleted {
+    final today = DateTime.now();
+    return recentHistory.any((c) =>
+        (c.type == 'clock_in' || c.type == 'in') &&
+        c.createdAt.year == today.year &&
+        c.createdAt.month == today.month &&
+        c.createdAt.day == today.day);
+  }
+
+  /// 今日是否已完成下班打卡
+  bool get isClockOutCompleted {
+    final today = DateTime.now();
+    return recentHistory.any((c) =>
+        (c.type == 'clock_out' || c.type == 'out') &&
+        c.createdAt.year == today.year &&
+        c.createdAt.month == today.month &&
+        c.createdAt.day == today.day);
+  }
+
+  /// 今日上班打卡时间（已打卡时返回格式化的时间文本）
+  String get clockInTimeText {
+    final today = DateTime.now();
+    final clockIn = recentHistory
+        .where((c) => c.type == 'clock_in' || c.type == 'in')
+        .where((c) =>
+            c.createdAt.year == today.year &&
+            c.createdAt.month == today.month &&
+            c.createdAt.day == today.day)
+        .firstOrNull;
+    return clockIn?.formattedTime ?? '未打卡';
+  }
+
+  /// 今日下班打卡时间
+  String get clockOutTimeText {
+    final today = DateTime.now();
+    final clockOut = recentHistory
+        .where((c) => c.type == 'clock_out' || c.type == 'out')
+        .where((c) =>
+            c.createdAt.year == today.year &&
+            c.createdAt.month == today.month &&
+            c.createdAt.day == today.day)
+        .firstOrNull;
+    return clockOut?.formattedTime ?? '未打卡';
   }
 
   /// 考勤类型的打卡类型（上下班）
@@ -135,7 +182,8 @@ class AttendanceLoaded extends AttendanceState {
       nearestProject: nearestProject ?? this.nearestProject,
       distanceToNearest: distanceToNearest ?? this.distanceToNearest,
       isInsideGeofence: isInsideGeofence ?? this.isInsideGeofence,
-      needsProjectConfirmation: needsProjectConfirmation ?? this.needsProjectConfirmation,
+      needsProjectConfirmation:
+          needsProjectConfirmation ?? this.needsProjectConfirmation,
       selectedCheckinType: selectedCheckinType ?? this.selectedCheckinType,
       selectedProjectId: selectedProjectId ?? this.selectedProjectId,
       isSubmitting: isSubmitting ?? this.isSubmitting,

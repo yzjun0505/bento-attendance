@@ -2,7 +2,6 @@ import 'package:dio/dio.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 class ApiClient {
@@ -10,136 +9,41 @@ class ApiClient {
   final Dio _refreshDio = Dio();
   final _storage = const FlutterSecureStorage();
   static Future<String?>? _refreshing;
-  static const _runtimeApiBaseUrlKey = 'runtime_api_base_url';
-  static const _runtimeServerIpKey = 'runtime_server_ip';
-  static String? _runtimeApiBaseUrl;
-  static String? _runtimeServerIp;
+  static const _defaultApiBaseUrl = 'http://150.158.79.174/api';
 
-  static Future<void> loadRuntimeConfig() async {
-    final prefs = await SharedPreferences.getInstance();
-    _runtimeApiBaseUrl = prefs.getString(_runtimeApiBaseUrlKey);
-    _runtimeServerIp = prefs.getString(_runtimeServerIpKey);
-
-    const packagedApiBaseUrl = String.fromEnvironment('API_BASE_URL');
-    if (packagedApiBaseUrl.isNotEmpty &&
-        _runtimeApiBaseUrl != null &&
-        _runtimeApiBaseUrl!.isNotEmpty) {
-      final normalizedPackaged = normalizeApiBaseUrl(packagedApiBaseUrl);
-      final storedHost = Uri.tryParse(_runtimeApiBaseUrl!)?.host ?? '';
-      final packagedHost = Uri.tryParse(normalizedPackaged)?.host ?? '';
-      if (_isPrivateOrLocalHost(storedHost) &&
-          !_isPrivateOrLocalHost(packagedHost)) {
-        _runtimeApiBaseUrl = normalizedPackaged;
-        _runtimeServerIp = packagedHost;
-        await prefs.setString(_runtimeApiBaseUrlKey, normalizedPackaged);
-        await prefs.setString(_runtimeServerIpKey, packagedHost);
-      }
-    }
-  }
-
-  static Future<void> saveRuntimeApiBaseUrl(String value) async {
-    final normalized = normalizeApiBaseUrl(value);
-    final prefs = await SharedPreferences.getInstance();
-    _runtimeApiBaseUrl = normalized;
-    _runtimeServerIp = Uri.parse(normalized).host;
-    await prefs.setString(_runtimeApiBaseUrlKey, normalized);
-    await prefs.setString(_runtimeServerIpKey, _runtimeServerIp!);
-  }
-
-  static String normalizeApiBaseUrl(String value) {
-    var raw = value.trim();
-    if (raw.isEmpty) return baseUrl;
-    final hadScheme = raw.startsWith('http://') || raw.startsWith('https://');
-    if (!hadScheme) {
-      raw = 'http://$raw';
-    }
-
-    var uri = Uri.parse(raw);
-    if (uri.host.isEmpty && uri.path.isNotEmpty) {
-      uri = Uri.parse('http://$raw');
-    }
-
-    var path = uri.path;
-    if (path.isEmpty || path == '/') {
-      path = '/api';
-    } else if (!path.endsWith('/api')) {
-      path = path.endsWith('/') ? '${path}api' : '$path/api';
-    }
-
-    uri = uri.replace(
-      port: uri.hasPort ? uri.port : (hadScheme ? null : 3000),
-      path: path,
-      query: null,
-      fragment: null,
-    );
-    return uri.toString().replaceFirst(RegExp(r'/$'), '');
-  }
-
-  static String _configuredHost() {
-    if (_runtimeServerIp != null && _runtimeServerIp!.isNotEmpty) {
-      return _runtimeServerIp!;
-    }
-    if (_runtimeApiBaseUrl != null && _runtimeApiBaseUrl!.isNotEmpty) {
-      return Uri.parse(_runtimeApiBaseUrl!).host;
-    }
-    return serverIp;
-  }
-
-  static bool _isPrivateOrLocalHost(String host) {
-    final value = host.trim().toLowerCase();
-    if (value.isEmpty) return false;
-    if (value == 'localhost' || value == '127.0.0.1' || value == '10.0.2.2') {
-      return true;
-    }
-    if (value.startsWith('10.')) return true;
-    if (value.startsWith('192.168.')) return true;
-
-    final parts = value.split('.');
-    if (parts.length == 4 && parts.first == '172') {
-      final second = int.tryParse(parts[1]);
-      return second != null && second >= 16 && second <= 31;
-    }
-    return false;
-  }
+  static Future<void> loadRuntimeConfig() async {}
 
   // --- 统一服务器 IP 配置 ---
-  // 说明：
-  // - 真机(同一 WiFi)：填电脑局域网 IP（如 192.168.1.10）
-  // - Android 真机 USB 调试：可先执行 `adb reverse tcp:3000 tcp:3000`，然后用 127.0.0.1
-  // - Android 模拟器：通常用 10.0.2.2 访问宿主机（不要用 localhost）
-  //
-  // 推荐：不要再手改代码，直接用：
-  // flutter run --dart-define=SERVER_IP=192.168.1.10
   static String get serverIp {
-    if (_runtimeServerIp != null && _runtimeServerIp!.isNotEmpty) {
-      return _runtimeServerIp!;
-    }
     const v = String.fromEnvironment('SERVER_IP');
     if (v.isNotEmpty) return v;
     if (kIsWeb) return Uri.base.host.isNotEmpty ? Uri.base.host : '127.0.0.1';
-    if (defaultTargetPlatform == TargetPlatform.android) return '10.0.2.2';
-    return '127.0.0.1';
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return '150.158.79.174';
+    }
+    return '150.158.79.174';
   }
 
   static String get baseUrl {
-    if (_runtimeApiBaseUrl != null && _runtimeApiBaseUrl!.isNotEmpty) {
-      return _runtimeApiBaseUrl!;
-    }
     const v = String.fromEnvironment('API_BASE_URL');
-    if (v.isEmpty) return 'http://$serverIp:3000/api';
+    if (v.isEmpty) return _defaultApiBaseUrl;
     final normalized = v.endsWith('/') ? v.substring(0, v.length - 1) : v;
     return normalized.endsWith('/api') ? normalized : '$normalized/api';
   }
 
-  // OpenIM 默认地址（当后端未返回配置时作为 fallback）
-  static String get openIMApiUrl {
-    const v = String.fromEnvironment('OPENIM_API_URL');
-    return v.isNotEmpty ? v : 'http://${_configuredHost()}:10002';
+  static String resolveFileUrl(String? value) {
+    final raw = value?.trim() ?? '';
+    if (raw.isEmpty) return '';
+    final uri = Uri.tryParse(raw);
+    if (uri != null && uri.hasScheme) return raw;
+    final path = raw.startsWith('/') ? raw : '/$raw';
+    return Uri.parse(baseUrl).resolve(path).toString();
   }
 
-  static String get openIMWsUrl {
-    const v = String.fromEnvironment('OPENIM_WS_URL');
-    return v.isNotEmpty ? v : 'ws://${_configuredHost()}:10001';
+  // 腾讯云 IM 配置
+  static String get tencentIMAppId {
+    const v = String.fromEnvironment('TENCENT_IM_APP_ID');
+    return v.isNotEmpty ? v : '1600142882';
   }
 
   Future<String> _getDeviceId() async {
@@ -191,6 +95,11 @@ class ApiClient {
         final newToken = resp.data['data']?['access_token'] as String?;
         if (newToken != null && newToken.isNotEmpty) {
           await _storage.write(key: 'jwt_token', value: newToken);
+          final newRefreshToken =
+              resp.data['data']?['refresh_token'] as String?;
+          if (newRefreshToken != null && newRefreshToken.isNotEmpty) {
+            await _storage.write(key: 'refresh_token', value: newRefreshToken);
+          }
           completer.complete(newToken);
           return completer.future;
         }
@@ -204,6 +113,8 @@ class ApiClient {
       _refreshing = null;
     }
   }
+
+  Future<String?> refreshAccessToken() => _refreshAccessToken();
 
   ApiClient() {
     reloadOptions();

@@ -194,4 +194,77 @@ describe('打卡模块 API 测试', () => {
       expect(res.status).toBe(401);
     });
   });
+
+  describe('GET /api/checkin/search-code', () => {
+    test('可查询已使用防伪码，并兼容小写和连字符', async () => {
+      const worker = {
+        username: `wmworker${Date.now()}`,
+        password: 'worker123456',
+        name: '防伪员工',
+        role: 'worker'
+      };
+      await request(app).post('/api/auth/register').send(worker);
+      const loginRes = await request(app).post('/api/auth/login').send({
+        username: worker.username,
+        password: worker.password
+      });
+      const workerToken = loginRes.body.data.access_token || loginRes.body.data.token;
+
+      const reserveRes = await request(app)
+        .get('/api/checkin/reserve-code')
+        .set('Authorization', `Bearer ${workerToken}`);
+      expect(reserveRes.status).toBe(200);
+      const code = reserveRes.body.data.watermark_code;
+
+      const checkinRes = await request(app)
+        .post('/api/checkin')
+        .set('Authorization', `Bearer ${workerToken}`)
+        .send({
+          type: 'clock_in',
+          latitude: 39.9042,
+          longitude: 116.4074,
+          address: '防伪码测试地址',
+          watermark_code: code
+        });
+      expect(checkinRes.status).toBe(200);
+
+      const dashedLowerCode = `${code.slice(0, 8)}-${code.slice(8)}`.toLowerCase();
+      const res = await request(app)
+        .get(`/api/checkin/search-code?code=${dashedLowerCode}`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.code).toBe(200);
+      expect(res.body.data.watermark_code).toBe(code);
+      expect(res.body.data.code_status).toBe('used');
+      expect(res.body.data.code_status_text).toBe('防伪码已使用');
+    });
+
+    test('预占未使用防伪码返回 pending 状态', async () => {
+      const reserveRes = await request(app)
+        .get('/api/checkin/reserve-code')
+        .set('Authorization', `Bearer ${token}`);
+      expect(reserveRes.status).toBe(200);
+
+      const res = await request(app)
+        .get(`/api/checkin/search-code?code=${reserveRes.body.data.watermark_code}`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.code).toBe(200);
+      expect(res.body.data.watermark_code).toBe(reserveRes.body.data.watermark_code);
+      expect(res.body.data.code_status).toBe('pending');
+      expect(res.body.data.code_status_text).toBe('防伪码已预占，尚未绑定打卡记录');
+    });
+
+    test('不存在防伪码返回 null', async () => {
+      const res = await request(app)
+        .get('/api/checkin/search-code?code=NOTFOUND12345678')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.code).toBe(200);
+      expect(res.body.data).toBeNull();
+    });
+  });
 });

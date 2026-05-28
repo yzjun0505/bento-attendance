@@ -23,6 +23,21 @@ dist/
 .DS_Store
 Thumbs.db
 
+# Local planning / generated documentation
+.trae/
+BrandAssets/
+TUIKit_Flutter/
+chat-demo/
+docs_assets/
+tools/
+CORE_ER.md
+PROJECT_STRUCTURE.md
+jingmap_er_diagram.sql
+*需求分析*.docx
+*需求分析说明书.docx
+* 2.json
+* 2.vue
+
 # Logs
 logs/
 *.log
@@ -30,10 +45,14 @@ logs/
 # Flutter
 .flutter-plugins
 .flutter-plugins-dependencies
+.flutter-plugins-dependencies*
 .packages
 .pub-cache/
 .pub/
 .dart_tool/
+MobileApp/ios/Flutter/Generated*.xcconfig
+MobileApp/ios/Flutter/flutter_export_environment*.sh
+MobileApp/build*/
 
 # iOS/Android build
 MobileApp/ios/Pods/

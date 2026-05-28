@@ -4,6 +4,8 @@
  */
 const cron = require('node-cron');
 const { getPool } = require('../models/db');
+const notificationService = require('./notificationService');
+const logger = require('../utils/logger');
 
 const STATUS = {
   NORMAL: 'normal',
@@ -45,7 +47,7 @@ async function analyzeAttendance() {
         `SELECT agm.user_id, u.name as user_name
          FROM attendance_group_members agm
          LEFT JOIN users u ON agm.user_id = u.id
-         WHERE agm.group_id = ? AND u.status = 1`,
+         WHERE agm.group_id = ? AND u.status = 1 AND u.role != 'admin'`,
         [group.id]
       );
 
@@ -116,11 +118,92 @@ async function analyzeAttendance() {
   }
 }
 
+/**
+ * 每日报告推送 — 向经理/管理员发送前一日考勤汇总
+ */
+async function sendDailyReport() {
+  try {
+    const db = getPool();
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const pad = (n) => String(n).padStart(2, '0');
+    const dateStr = `${yesterday.getFullYear()}-${pad(yesterday.getMonth() + 1)}-${pad(yesterday.getDate())}`;
+
+    const [[summary]] = await db.query(`
+      SELECT
+        COUNT(DISTINCT ar.user_id) as totalAttendees,
+        SUM(CASE WHEN ar.status = 'normal' THEN 1 ELSE 0 END) as normalCount,
+        SUM(CASE WHEN ar.status = 'late' THEN 1 ELSE 0 END) as lateCount,
+        SUM(CASE WHEN ar.status = 'absent' THEN 1 ELSE 0 END) as absentCount,
+        SUM(CASE WHEN ar.status = 'leave' THEN 1 ELSE 0 END) as leaveCount,
+        SUM(CASE WHEN ar.status = 'early_leave' THEN 1 ELSE 0 END) as earlyLeaveCount
+      FROM attendance_results ar
+      JOIN users u ON ar.user_id = u.id
+      WHERE ar.date = ? AND u.role != 'admin'
+    `, [dateStr]);
+
+    const [absentUsers] = await db.query(`
+      SELECT u.name FROM attendance_results ar
+      JOIN users u ON ar.user_id = u.id
+      WHERE ar.date = ? AND ar.status = 'absent' AND u.role != 'admin'
+    `, [dateStr]);
+
+    const [projects] = await db.query(`
+      SELECT name,
+        ROUND(AVG(progress_percent), 1) as overallProgress,
+        SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as activeNodes,
+        SUM(CASE WHEN plan_end_date < CURDATE() AND status != 'completed' THEN 1 ELSE 0 END) as overdueNodes
+      FROM task_nodes tn
+      JOIN projects p ON tn.project_id = p.id
+      GROUP BY tn.project_id, p.name
+    `).catchError(() => []);
+
+    const absentNames = absentUsers.map(u => u.name).join('、') || '无';
+    const projectLines = (projects || []).map(p =>
+      `· ${p.name}: ${p.overallProgress}% (进行中${p.activeNodes}项, 逾期${p.overdueNodes}项)`
+    ).join('\n') || '暂无项目数据';
+
+    const content = `📊 ${dateStr} 考勤日报
+
+👥 出勤统计：
+· 正常: ${summary.normalCount || 0}人
+· 迟到: ${summary.lateCount || 0}人
+· 早退: ${summary.earlyLeaveCount || 0}人
+· 请假: ${summary.leaveCount || 0}人
+· 缺勤: ${summary.absentCount || 0}人
+· 出勤总人数: ${summary.totalAttendees || 0}人
+
+⚠️ 缺勤人员：${absentNames}
+
+📐 项目进度：
+${projectLines}`;
+
+    const [managers] = await db.query(
+      `SELECT id FROM users WHERE status = 1 AND role IN ('admin', 'manager')`
+    );
+    const managerIds = managers.map(r => r.id);
+    if (managerIds.length > 0) {
+      await notificationService.createNotificationForUsers(managerIds, {
+        title: `📊 ${dateStr} 考勤日报`,
+        content,
+        type: 'report',
+      });
+      logger.info(`每日报告已推送至 ${managerIds.length} 位管理者`);
+    }
+  } catch (err) {
+    logger.error('发送每日报告失败', { error: err.message });
+  }
+}
+
 function startScheduler() {
   cron.schedule('0 1 * * *', analyzeAttendance, {
     timezone: 'Asia/Shanghai'
   });
-  console.log('✅ 考勤分析定时任务已启动 (每天凌晨1点执行)');
+  // 每日报告推送：上午9点
+  cron.schedule('0 9 * * *', sendDailyReport, {
+    timezone: 'Asia/Shanghai'
+  });
+  console.log('✅ 定时任务已启动 (凌晨1点考勤分析，上午9点日报推送)');
 }
 
-module.exports = { analyzeAttendance, startScheduler, STATUS };
+module.exports = { analyzeAttendance, sendDailyReport, startScheduler, STATUS };

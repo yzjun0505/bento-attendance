@@ -1,7 +1,7 @@
 /**
- * IM 会话控制器（OpenIM）
+ * IM 会话控制器（腾讯云 IM）
  */
-const openIMService = require('../services/openimService');
+const tencentIMService = require('../services/tencentImService');
 const { successResponse, errorResponse } = require('../utils/helpers');
 
 /**
@@ -14,14 +14,14 @@ async function getConversations(req, res) {
     const pageNumber = Number(req.query.page || 1);
     const showNumber = Number(req.query.pageSize || 20);
 
-    const result = await openIMService.getSortedConversationList({
+    const result = await tencentIMService.getSortedConversationList({
       userID,
       pageNumber,
       showNumber,
     });
 
     if (!result.success) {
-      return res.status(502).json(errorResponse(result.message || 'OpenIM 服务异常', 502));
+      return res.status(502).json(errorResponse(result.message || '腾讯云 IM 服务异常', 502));
     }
     return res.json(successResponse(result.data));
   } catch (err) {
@@ -39,12 +39,12 @@ async function getConversationSeqs(req, res) {
     const userID = req.user.id;
     const returnPinned = String(req.query.returnPinned || 'false') === 'true';
 
-    const result = await openIMService.getConversationsHasReadAndMaxSeq({
+    const result = await tencentIMService.getConversationsHasReadAndMaxSeq({
       userID,
       returnPinned,
     });
     if (!result.success) {
-      return res.status(502).json(errorResponse(result.message || 'OpenIM 服务异常', 502));
+      return res.status(502).json(errorResponse(result.message || '腾讯云 IM 服务异常', 502));
     }
     return res.json(successResponse(result.data));
   } catch (err) {
@@ -62,32 +62,28 @@ async function markConversationRead(req, res) {
   try {
     const userID = req.user.id;
     const conversationID = req.params.conversationID;
-    let { hasReadSeq } = req.body || {};
+    let { hasReadSeq, peerAccount } = req.body || {};
 
-    // 没传 hasReadSeq，则先拉取 maxSeq，再标记为已读
     if (!hasReadSeq) {
-      const seqResult = await openIMService.getConversationsHasReadAndMaxSeq({
+      const seqResult = await tencentIMService.getConversationsHasReadAndMaxSeq({
         userID,
         conversationIDs: [conversationID],
         returnPinned: false,
       });
       if (!seqResult.success) {
-        return res.status(502).json(errorResponse(seqResult.message || 'OpenIM 服务异常', 502));
+        return res.status(502).json(errorResponse(seqResult.message || '腾讯云 IM 服务异常', 502));
       }
-      const seqInfo = seqResult.data?.seqs?.[conversationID] || seqResult.data?.Seqs?.[conversationID];
-      // OpenIM 返回字段在不同版本可能有大小写差异，这里兼容一下
-      hasReadSeq = seqInfo?.maxSeq ?? seqInfo?.MaxSeq ?? 0;
+      const seqInfo = seqResult.data?.seqs?.[conversationID];
+      hasReadSeq = seqInfo?.maxSeq ?? 0;
     }
 
-    const result = await openIMService.markConversationAsRead({
+    const result = await tencentIMService.markConversationAsRead({
       userID,
-      conversationID,
-      hasReadSeq: Number(hasReadSeq) || 0,
-      seqs: [],
+      peerAccount: peerAccount || conversationID,
     });
 
     if (!result.success) {
-      return res.status(502).json(errorResponse(result.message || 'OpenIM 服务异常', 502));
+      return res.status(502).json(errorResponse(result.message || '腾讯云 IM 服务异常', 502));
     }
     return res.json(successResponse(null, '已清除未读'));
   } catch (err) {
@@ -110,16 +106,13 @@ async function setConversationPin(req, res) {
     if (typeof isPinned !== 'boolean') {
       return res.status(400).json(errorResponse('isPinned 必须是 boolean', 400));
     }
-    if (!conversationType) {
-      return res.status(400).json(errorResponse('conversationType 必填（1单聊/2群聊等）', 400));
-    }
 
-    const result = await openIMService.setConversations({
+    const result = await tencentIMService.setConversations({
       operatorUserID,
       userIDs: [operatorUserID.toString()],
       conversation: {
         conversationID,
-        conversationType: Number(conversationType),
+        conversationType: Number(conversationType) || 1,
         userID: userID || '',
         groupID: groupID || '',
         isPinned,
@@ -127,7 +120,7 @@ async function setConversationPin(req, res) {
     });
 
     if (!result.success) {
-      return res.status(502).json(errorResponse(result.message || 'OpenIM 服务异常', 502));
+      return res.status(502).json(errorResponse(result.message || '腾讯云 IM 服务异常', 502));
     }
     return res.json(successResponse(null, '会话设置已更新'));
   } catch (err) {
@@ -142,4 +135,3 @@ module.exports = {
   markConversationRead,
   setConversationPin,
 };
-

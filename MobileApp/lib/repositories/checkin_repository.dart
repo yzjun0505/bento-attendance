@@ -82,7 +82,10 @@ class CheckinRepository {
       if (response.statusCode == 200) {
         final dynamic rawData = response.data['data'];
         if (rawData is List && rawData.isNotEmpty) {
-          final templates = rawData.map((json) => WatermarkTemplate.fromJson(json as Map<String, dynamic>)).toList();
+          final templates = rawData
+              .map((json) =>
+                  WatermarkTemplate.fromJson(json as Map<String, dynamic>))
+              .toList();
           await _cacheTemplates(templates);
           return templates;
         }
@@ -114,7 +117,8 @@ class CheckinRepository {
         return [];
       }
       final templates = jsonList
-          .map((str) => WatermarkTemplate.fromCachedJson(jsonDecode(str) as Map<String, dynamic>))
+          .map((str) => WatermarkTemplate.fromCachedJson(
+              jsonDecode(str) as Map<String, dynamic>))
           .toList();
       debugPrint('从本地缓存加载了 ${templates.length} 个水印模板');
       return templates;
@@ -143,8 +147,10 @@ class CheckinRepository {
   Future<List<Checkin>> getTodayCheckins() async {
     try {
       final now = DateTime.now();
-      final dateStart = DateTime(now.year, now.month, now.day).toIso8601String();
-      final dateEnd = DateTime(now.year, now.month, now.day, 23, 59, 59).toIso8601String();
+      final dateStart =
+          DateTime(now.year, now.month, now.day).toIso8601String();
+      final dateEnd =
+          DateTime(now.year, now.month, now.day, 23, 59, 59).toIso8601String();
 
       final response = await apiClient.dio.get('/checkin', queryParameters: {
         'date_start': dateStart,

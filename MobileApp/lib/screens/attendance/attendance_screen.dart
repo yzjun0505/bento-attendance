@@ -35,8 +35,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(state.isOutside ? "已在围栏外打卡" : "打卡成功"),
-                backgroundColor:
-                    state.isOutside ? Colors.orange : Colors.green,
+                backgroundColor: state.isOutside ? Colors.orange : Colors.green,
               ),
             );
             setState(() {
@@ -45,8 +44,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           } else if (state is AttendanceError) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                  content: Text(state.message),
-                  backgroundColor: Colors.red),
+                  content: Text(state.message), backgroundColor: Colors.red),
             );
           }
         },
@@ -70,7 +68,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           children: [
             Icon(Icons.error_outline, size: 64, color: colors.error),
             const SizedBox(height: 16),
-            Text(state.message, textAlign: TextAlign.center,
+            Text(state.message,
+                textAlign: TextAlign.center,
                 style: TextStyle(color: colors.textPrimary)),
             const SizedBox(height: 24),
             ElevatedButton(
@@ -134,16 +133,16 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 TextButton.icon(
                   onPressed: () => setState(() => _photoFile = null),
                   icon: Icon(Icons.refresh, color: colors.primary),
-                  label: Text('重拍',
-                      style: TextStyle(color: colors.primary)),
+                  label: Text('重拍', style: TextStyle(color: colors.primary)),
                 ),
             ],
           ),
           const SizedBox(height: 16),
           if (_photoFile == null)
-            _isProcessing 
-              ? Center(child: CircularProgressIndicator(color: colors.primary))
-              : _buildPhotoButtons(colors, state)
+            _isProcessing
+                ? Center(
+                    child: CircularProgressIndicator(color: colors.primary))
+                : _buildPhotoButtons(colors, state)
           else
             _buildPhotoPreview(colors),
         ],
@@ -329,8 +328,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 children: [
                   Text(
                     '距离围栏中心',
-                    style: TextStyle(
-                        color: colors.textSecondary, fontSize: 12),
+                    style: TextStyle(color: colors.textSecondary, fontSize: 12),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -348,8 +346,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 children: [
                   Text(
                     '打卡状态',
-                    style: TextStyle(
-                        color: colors.textSecondary, fontSize: 12),
+                    style: TextStyle(color: colors.textSecondary, fontSize: 12),
                   ),
                   const SizedBox(height: 4),
                   Container(
@@ -408,13 +405,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           Row(
             children: [
               Expanded(
-                child: _buildCheckButton(
-                    context, "上班打卡", "in", colors.primary),
+                child: _buildCheckButton(context, "上班打卡", "in", colors.primary),
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: _buildCheckButton(
-                    context, "下班打卡", "out", colors.success),
+                child:
+                    _buildCheckButton(context, "下班打卡", "out", colors.success),
               ),
             ],
           ),

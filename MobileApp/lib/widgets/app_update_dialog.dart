@@ -1,12 +1,9 @@
 import 'dart:async';
-import 'dart:io';
 
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:open_filex/open_filex.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../repositories/app_update_repository.dart';
+import '../services/app_update_download_service.dart';
 
 class AppUpdateDialog {
   static Future<void> show(
@@ -30,38 +27,74 @@ class _AppUpdateDialog extends StatefulWidget {
   State<_AppUpdateDialog> createState() => _AppUpdateDialogState();
 }
 
-class _AppUpdateDialogState extends State<_AppUpdateDialog> {
-  final Dio _dio = Dio();
-  CancelToken? _cancelToken;
-  Timer? _speedTimer;
-  bool _downloading = false;
-  bool _downloaded = false;
-  String? _filePath;
+class _AppUpdateDialogState extends State<_AppUpdateDialog>
+    with WidgetsBindingObserver {
+  final AppUpdateDownloadService _downloadService =
+      AppUpdateDownloadService.instance;
+
+  Timer? _pollTimer;
+  AppUpdateDownloadSnapshot _snapshot = const AppUpdateDownloadSnapshot.idle();
   String? _error;
-  int _received = 0;
-  int _total = 0;
   int _lastReceived = 0;
   double _speedBytesPerSecond = 0;
+  DateTime? _lastProgressAt;
+  int _lastKnownTotalBytes = -1;
 
-  double get _progress {
-    if (_total <= 0) return 0;
-    return (_received / _total).clamp(0, 1);
-  }
+  bool get _downloading => _snapshot.isActive;
+  bool get _downloaded => _snapshot.canInstall;
+
+  double get _progress => _snapshot.progress;
 
   Duration? get _remaining {
-    if (_speedBytesPerSecond <= 0 || _total <= 0 || _received <= 0) {
+    final total = _snapshot.totalBytes;
+    final received = _snapshot.downloadedBytes;
+    if (_speedBytesPerSecond <= 0 || total <= 0 || received <= 0) {
       return null;
     }
-    final left = _total - _received;
+    final left = total - received;
     if (left <= 0) return Duration.zero;
     return Duration(seconds: (left / _speedBytesPerSecond).ceil());
   }
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_restoreDownload());
+  }
+
+  @override
   void dispose() {
-    _speedTimer?.cancel();
-    _cancelToken?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _pollTimer?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_restoreDownload());
+    }
+  }
+
+  Future<void> _restoreDownload() async {
+    try {
+      final snapshot = await _downloadService.restore(widget.update);
+      if (!mounted) return;
+      setState(() {
+        _snapshot = _mergeSnapshot(snapshot);
+        _lastReceived = snapshot.downloadedBytes;
+        if (snapshot.totalBytes > 0) {
+          _lastKnownTotalBytes = snapshot.totalBytes;
+        }
+      });
+      if (snapshot.isActive) {
+        _startPolling();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = '读取下载状态失败：$e');
+    }
   }
 
   Future<void> _startDownload() async {
@@ -72,87 +105,147 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> {
     }
 
     setState(() {
-      _downloading = true;
-      _downloaded = false;
       _error = null;
-      _received = 0;
-      _total = 0;
-      _lastReceived = 0;
       _speedBytesPerSecond = 0;
-    });
-
-    _cancelToken = CancelToken();
-    _speedTimer?.cancel();
-    _speedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) return;
-      setState(() {
-        _speedBytesPerSecond = (_received - _lastReceived).toDouble();
-        _lastReceived = _received;
-      });
+      _lastReceived = 0;
+      _lastProgressAt = null;
     });
 
     try {
-      final dir = await getTemporaryDirectory();
-      final fileName = 'jingtu-${widget.update.latestVersionName}.apk';
-      final path = '${dir.path}${Platform.pathSeparator}$fileName';
-      await _dio.download(
-        url,
-        path,
-        cancelToken: _cancelToken,
-        deleteOnError: true,
-        options: Options(
-          receiveTimeout: Duration.zero,
-          followRedirects: true,
-        ),
-        onReceiveProgress: (received, total) {
-          if (!mounted) return;
-          setState(() {
-            _received = received;
-            if (total > 0) _total = total;
-          });
-        },
-      );
+      final snapshot = await _downloadService.start(widget.update);
       if (!mounted) return;
-      _speedTimer?.cancel();
       setState(() {
-        _filePath = path;
-        _downloaded = true;
-        _downloading = false;
-        _received = _total > 0 ? _total : _received;
+        _snapshot = _mergeSnapshot(snapshot);
+        _lastReceived = snapshot.downloadedBytes;
+        if (snapshot.totalBytes > 0) {
+          _lastKnownTotalBytes = snapshot.totalBytes;
+        }
       });
-      await _install();
-    } on DioException catch (e) {
-      if (!mounted) return;
-      _speedTimer?.cancel();
-      setState(() {
-        _downloading = false;
-        _error = CancelToken.isCancel(e) ? '下载已取消' : '下载失败：${e.message ?? e.type.name}';
-      });
+      _startPolling();
     } catch (e) {
       if (!mounted) return;
-      _speedTimer?.cancel();
-      setState(() {
-        _downloading = false;
-        _error = '下载失败：$e';
-      });
+      setState(() => _error = '启动后台下载失败：$e');
     }
+  }
+
+  Future<void> _continueDownload() async {
+    setState(() {
+      _error = null;
+      _speedBytesPerSecond = 0;
+      _lastProgressAt = null;
+    });
+
+    try {
+      final snapshot = await _downloadService.continueOrRestart(widget.update);
+      if (!mounted) return;
+      setState(() {
+        _snapshot = _mergeSnapshot(snapshot);
+        _lastReceived = snapshot.downloadedBytes;
+      });
+      _startPolling();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = '继续下载失败：$e');
+    }
+  }
+
+  void _startPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      unawaited(_pollDownload());
+    });
+    unawaited(_pollDownload());
+  }
+
+  Future<void> _pollDownload() async {
+    final id = _snapshot.downloadId;
+    if (id == null) return;
+
+    try {
+      final snapshot = await _downloadService.query(id);
+      if (!mounted) return;
+      final merged = _mergeSnapshot(snapshot);
+      final delta = merged.downloadedBytes - _lastReceived;
+      final now = DateTime.now();
+      setState(() {
+        _snapshot = merged;
+        if (delta > 0) {
+          final instantSpeed = delta.toDouble();
+          _speedBytesPerSecond = _speedBytesPerSecond > 0
+              ? (_speedBytesPerSecond * 0.55 + instantSpeed * 0.45)
+              : instantSpeed;
+          _lastProgressAt = now;
+        } else if (!merged.isActive ||
+            (_lastProgressAt != null &&
+                now.difference(_lastProgressAt!) >
+                    const Duration(seconds: 5))) {
+          _speedBytesPerSecond = 0;
+        }
+        _lastReceived = merged.downloadedBytes;
+        if (merged.canInstall) {
+          _error = null;
+        } else if (merged.hasFailed) {
+          _error = '下载失败，请重新下载';
+        } else if (merged.state == AppUpdateDownloadState.paused) {
+          _error = '下载已暂停，可点“继续更新”重新连接下载';
+        }
+      });
+      if (!merged.isActive) {
+        _pollTimer?.cancel();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = '读取下载进度失败：$e');
+    }
+  }
+
+  AppUpdateDownloadSnapshot _mergeSnapshot(AppUpdateDownloadSnapshot snapshot) {
+    final total = snapshot.totalBytes > 0
+        ? snapshot.totalBytes
+        : (_lastKnownTotalBytes > 0
+            ? _lastKnownTotalBytes
+            : snapshot.totalBytes);
+    final downloaded = snapshot.downloadId == _snapshot.downloadId
+        ? snapshot.downloadedBytes
+            .clamp(_snapshot.downloadedBytes, 1 << 62)
+            .toInt()
+        : snapshot.downloadedBytes;
+    if (total > 0) {
+      _lastKnownTotalBytes = total;
+    }
+    return snapshot.copyWith(
+      downloadedBytes: downloaded,
+      totalBytes: total,
+    );
   }
 
   Future<void> _install() async {
-    final path = _filePath;
-    if (path == null) return;
-    final result = await OpenFilex.open(
-      path,
-      type: 'application/vnd.android.package-archive',
-    );
-    if (!mounted) return;
-    if (result.type != ResultType.done) {
-      setState(() => _error = result.message);
+    final id = _snapshot.downloadId;
+    if (id == null) return;
+    try {
+      await _downloadService.install(id);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = '打开安装器失败：$e');
     }
   }
 
-  void _cancel() {
-    _cancelToken?.cancel();
+  Future<void> _cancelDownload() async {
+    final id = _snapshot.downloadId;
+    if (id == null) return;
+    await _downloadService.cancel(id);
+    if (!mounted) return;
+    if (widget.update.forceUpdate) {
+      setState(() {
+        _snapshot = const AppUpdateDownloadSnapshot.idle();
+        _error = null;
+      });
+    } else {
+      Navigator.of(context).pop();
+    }
+  }
+
+  void _dismissToBackground() {
     if (!widget.update.forceUpdate) {
       Navigator.of(context).pop();
     }
@@ -161,16 +254,22 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final progressText = _total > 0
-        ? '${_formatBytes(_received)} / ${_formatBytes(_total)}'
-        : _formatBytes(_received);
+    final total = _snapshot.totalBytes;
+    final received = _snapshot.downloadedBytes;
+    final progressText = total > 0
+        ? '${_formatBytes(received)} / ${_formatBytes(total)}'
+        : _formatBytes(received);
     final speedText = _speedBytesPerSecond > 0
         ? '${_formatBytes(_speedBytesPerSecond.round())}/s'
         : '--';
     final etaText = _remaining == null ? '--' : _formatDuration(_remaining!);
+    final hasProgress = total > 0;
+    final canContinue = _snapshot.state == AppUpdateDownloadState.paused ||
+        _snapshot.state == AppUpdateDownloadState.failed ||
+        _snapshot.state == AppUpdateDownloadState.missing;
 
     return PopScope(
-      canPop: !widget.update.forceUpdate && !_downloading,
+      canPop: !widget.update.forceUpdate,
       child: AlertDialog(
         title: Text(widget.update.forceUpdate ? '需要更新后继续使用' : '发现新版本'),
         content: Column(
@@ -183,12 +282,27 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> {
               Text(widget.update.releaseNotes),
             ],
             const SizedBox(height: 16),
-            LinearProgressIndicator(value: _total > 0 ? _progress : null),
+            LinearProgressIndicator(value: hasProgress ? _progress : null),
             const SizedBox(height: 10),
-            _InfoRow(label: '进度', value: '${(_progress * 100).toStringAsFixed(1)}%'),
+            _InfoRow(label: '状态', value: _statusText()),
+            _InfoRow(
+              label: '进度',
+              value: hasProgress
+                  ? '${(_progress * 100).toStringAsFixed(1)}%'
+                  : '--',
+            ),
             _InfoRow(label: '大小', value: progressText),
             _InfoRow(label: '速度', value: speedText),
             _InfoRow(label: '预计剩余', value: etaText),
+            if (_downloading) ...[
+              const SizedBox(height: 8),
+              Text(
+                '可返回后台继续下载，下载完成后再打开安装。',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+            ],
             if (_error != null) ...[
               const SizedBox(height: 10),
               Text(
@@ -201,25 +315,46 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> {
           ],
         ),
         actions: [
-          if (!widget.update.forceUpdate && !_downloading)
+          if (!widget.update.forceUpdate)
             TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('稍后再说'),
+              onPressed: _dismissToBackground,
+              child: Text(_downloading ? '后台下载' : '稍后再说'),
             ),
-          if (_downloading)
+          if (_downloading && !widget.update.forceUpdate)
             TextButton(
-              onPressed: widget.update.forceUpdate ? null : _cancel,
-              child: const Text('取消'),
+              onPressed: _cancelDownload,
+              child: const Text('取消下载'),
             ),
           FilledButton(
-            onPressed: _downloading
-                ? null
-                : (_downloaded ? _install : _startDownload),
-            child: Text(_downloaded ? '安装' : '立即更新'),
+            onPressed: _downloaded
+                ? _install
+                : (canContinue
+                    ? _continueDownload
+                    : (_downloading ? null : _startDownload)),
+            child: Text(_downloaded ? '安装' : (canContinue ? '继续更新' : '立即更新')),
           ),
         ],
       ),
     );
+  }
+
+  String _statusText() {
+    switch (_snapshot.state) {
+      case AppUpdateDownloadState.idle:
+        return '待下载';
+      case AppUpdateDownloadState.pending:
+        return '等待系统下载';
+      case AppUpdateDownloadState.running:
+        return '下载中';
+      case AppUpdateDownloadState.paused:
+        return '已暂停';
+      case AppUpdateDownloadState.successful:
+        return '下载完成';
+      case AppUpdateDownloadState.failed:
+        return '下载失败';
+      case AppUpdateDownloadState.missing:
+        return '任务不存在';
+    }
   }
 
   String _formatBytes(int bytes) {
@@ -237,9 +372,13 @@ class _AppUpdateDialogState extends State<_AppUpdateDialog> {
 
   String _formatDuration(Duration duration) {
     if (duration <= Duration.zero) return '即将完成';
-    final minutes = duration.inMinutes;
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes % 60;
     final seconds = duration.inSeconds % 60;
-    if (minutes <= 0) return '${seconds}秒';
+    if (hours > 0) {
+      return '$hours小时${minutes.toString().padLeft(2, '0')}分';
+    }
+    if (minutes <= 0) return '$seconds秒';
     return '$minutes分${seconds.toString().padLeft(2, '0')}秒';
   }
 }

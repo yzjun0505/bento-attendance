@@ -51,7 +51,8 @@ class LocalPhotoRecord {
       watermarkCode: json['watermarkCode'],
       createdTime: json['createdTime'],
       checkinType: json['checkinType'],
-      customCheckinName: json['customCheckinName'] ?? json['CustomCheckinName'] ?? '打卡',
+      customCheckinName:
+          json['customCheckinName'] ?? json['CustomCheckinName'] ?? '打卡',
       projectId: json['projectId'],
       latitude: json['latitude'] ?? 0.0,
       longitude: json['longitude'] ?? 0.0,
@@ -70,7 +71,9 @@ class LocalAlbumService {
     if (items == null) return [];
 
     try {
-      return items.map((e) => LocalPhotoRecord.fromJson(jsonDecode(e))).toList();
+      return items
+          .map((e) => LocalPhotoRecord.fromJson(jsonDecode(e)))
+          .toList();
     } catch (_) {
       return [];
     }
@@ -86,7 +89,7 @@ class LocalAlbumService {
   static Future<void> removePhoto(String id) async {
     final prefs = await SharedPreferences.getInstance();
     final List<String> items = prefs.getStringList(_storageKey) ?? [];
-    
+
     final updated = items.where((str) {
       try {
         final decoded = jsonDecode(str);

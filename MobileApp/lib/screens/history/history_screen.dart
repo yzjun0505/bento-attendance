@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
-import '../../blocs/attendance/attendance_bloc.dart';
-import '../../blocs/attendance/attendance_state.dart';
-import '../../blocs/attendance/attendance_event.dart';
 import '../../blocs/auth/auth_bloc.dart';
 import '../../blocs/auth/auth_event.dart';
 import '../../blocs/auth/auth_state.dart';
@@ -12,8 +9,6 @@ import '../../blocs/home/home_bloc_base.dart';
 import '../../core/bento_colors.dart';
 import '../../core/bento_typography.dart';
 import '../../widgets/bento_widgets.dart';
-import '../../models/checkin_model.dart';
-import '../track/track_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -75,7 +70,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       if (_hasActiveFilter)
                         _buildFilterSummary(context, colors, theme),
                       Expanded(
-                          child: _buildHistoryList(context, colors, theme)),
+                        child: _buildContent(context, colors, theme, authState),
+                      ),
                     ],
                   );
                 },
@@ -151,94 +147,26 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  /// 明细列表
-  Widget _buildHistoryList(
-      BuildContext context, BentoColors colors, ThemeData theme) {
-    return BlocBuilder<AttendanceBloc, AttendanceState>(
-      builder: (context, state) {
-        if (state is AttendanceLoading || state is AttendanceInitial) {
-          return const BentoLoading.spinner();
-        }
-        if (state is AttendanceError) {
-          return BentoEmptyState(
-            icon: Icons.error_outline,
-            title: '加载失败',
-            description: state.message,
-            actionText: '重试',
-            onAction: () =>
-                context.read<AttendanceBloc>().add(LoadAttendanceData()),
-          );
-        }
-        if (state is AttendanceLoaded) {
-          final history = _filterHistory(state.recentHistory);
-          return RefreshIndicator(
-            color: colors.primary,
-            onRefresh: () async {
-              context.read<AttendanceBloc>().add(LoadAttendanceData());
-              context.read<HomeBloc>().add(const LoadHomeSummary(silent: true));
-            },
-            child: CustomScrollView(
-              slivers: [
-                // 今日动态区域
-                SliverToBoxAdapter(
-                  child: _buildTodayTimeline(context, colors, theme),
-                ),
-                // 历史记录标题
-                const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      BentoSpacing.space20,
-                      BentoSpacing.space16,
-                      BentoSpacing.space20,
-                      BentoSpacing.space8,
-                    ),
-                    child: Text(
-                      '历史记录',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-                // 历史记录列表
-                history.isEmpty
-                    ? SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: BentoSpacing.space32),
-                          child: BentoEmptyState(
-                            icon: Icons.history,
-                            title: _hasActiveFilter ? '没有匹配记录' : '暂无历史记录',
-                            description:
-                                _hasActiveFilter ? '换个关键词或日期再试试' : '还没有打卡记录',
-                          ),
-                        ),
-                      )
-                    : SliverPadding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: BentoSpacing.space20),
-                        sliver: SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                              final item = history[index];
-                              return _buildHistoryItem(
-                                  context, item, colors, theme);
-                            },
-                            childCount: history.length,
-                          ),
-                        ),
-                      ),
-                // 底部间距
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: BentoSpacing.space24),
-                ),
-              ],
-            ),
-          );
-        }
-        return const SizedBox();
+  Widget _buildContent(BuildContext context, BentoColors colors,
+      ThemeData theme, AuthAuthenticated authState) {
+    return RefreshIndicator(
+      color: colors.primary,
+      onRefresh: () async {
+        context.read<HomeBloc>().add(const LoadHomeSummary(silent: true));
       },
+      child: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: _buildTodayTimeline(context, colors, theme),
+          ),
+          SliverToBoxAdapter(
+            child: _buildFeatureGrid(context, colors, theme, authState),
+          ),
+          const SliverToBoxAdapter(
+            child: SizedBox(height: BentoSpacing.space24),
+          ),
+        ],
+      ),
     );
   }
 
@@ -323,31 +251,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  List<Checkin> _filterHistory(List<Checkin> history) {
-    return history.where((item) {
-      final selected = _selectedDate;
-      if (selected != null) {
-        final created = item.createdAt;
-        if (created.year != selected.year ||
-            created.month != selected.month ||
-            created.day != selected.day) {
-          return false;
-        }
-      }
-
-      if (_query.isEmpty) return true;
-      final haystack = [
-        item.type,
-        item.typeName,
-        item.address,
-        item.remark,
-        item.projectName ?? '',
-        item.watermarkCode ?? '',
-      ].join(' ').toLowerCase();
-      return haystack.contains(_query.toLowerCase());
-    }).toList();
-  }
-
   Future<void> _showSearchSheet(BuildContext context) async {
     final colors = context.colors;
     _searchController.text = _query;
@@ -421,6 +324,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
         }
 
         final timelineItems = state.timelineItems;
+        const maxVisible = 2;
+        final visibleItems = timelineItems.length > maxVisible
+            ? timelineItems.sublist(0, maxVisible)
+            : timelineItems;
 
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: BentoSpacing.space20),
@@ -469,8 +376,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ],
               ),
               const SizedBox(height: BentoSpacing.space12),
-              // 动态列表
-              if (timelineItems.isEmpty)
+              // 动态列表（最多显示2条）
+              if (visibleItems.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(
                       vertical: BentoSpacing.space16),
@@ -483,9 +390,107 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     ),
                   ),
                 )
-              else
-                ...timelineItems
-                    .map((item) => _buildTimelineItem(item, colors, theme)),
+              else ...[
+                ...visibleItems
+                    .map((item) => GestureDetector(
+                          onTap: () => _openTimelineDetail(context, item),
+                          child:
+                              _buildTimelineItem(item, colors, theme),
+                        )),
+                // 查看全部按钮
+                if (timelineItems.length > maxVisible)
+                  GestureDetector(
+                    onTap: () => _openAllTimeline(context, timelineItems, colors, theme),
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 8),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: colors.surfaceVariant,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Center(
+                        child: Text(
+                          '查看全部 ${timelineItems.length} 条动态',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colors.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _openTimelineDetail(BuildContext context, TimelineItem item) {
+    if (item.sourceType == 'checkin' && item.sourceId != null) {
+      Navigator.pushNamed(context, '/my_checkins');
+    } else if (item.sourceType == 'notification' && item.sourceId != null) {
+      Navigator.pushNamed(context, '/notifications');
+    } else if (item.sourceType == 'approval' && item.sourceId != null) {
+      Navigator.pushNamed(context, '/approval');
+    }
+  }
+
+  void _openAllTimeline(BuildContext context, List<TimelineItem> items,
+      BentoColors colors, ThemeData theme) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: colors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(BentoRadius.lg)),
+      ),
+      builder: (ctx) {
+        return Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(ctx).size.height * 0.7,
+          ),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).padding.bottom,
+            top: 16,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: colors.textTertiary.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                '今日动态 (${items.length})',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: colors.textPrimary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  itemCount: items.length,
+                  itemBuilder: (context, index) {
+                    final item = items[index];
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _openTimelineDetail(context, item);
+                      },
+                      child: _buildTimelineItem(item, colors, theme),
+                    );
+                  },
+                ),
+              ),
             ],
           ),
         );
@@ -553,157 +558,154 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  /// 明细列表项
-  Widget _buildHistoryItem(
-      BuildContext context, Checkin item, BentoColors colors, ThemeData theme) {
-    final type = item.type;
-    final isOutside = item.isOutside;
+  Widget _buildFeatureGrid(BuildContext context, BentoColors colors,
+      ThemeData theme, AuthAuthenticated authState) {
+    final role = authState.user.role;
 
-    // 获取类型信息
-    final IconData typeIcon;
-    final Color typeColor;
-    final String typeName;
+    final features = <Map<String, dynamic>>[];
+    features.add({
+      'icon': Icons.fact_check_outlined,
+      'title': '我的打卡',
+      'description': '查看个人打卡记录',
+      'color': const Color(0xFF3B82F6),
+      'route': '/my_checkins',
+    });
 
-    switch (type) {
-      case 'in':
-      case 'clock_in':
-        typeIcon = Icons.login;
-        typeColor = colors.primary;
-        typeName = '上班打卡';
-        break;
-      case 'out':
-      case 'clock_out':
-        typeIcon = Icons.logout;
-        typeColor = colors.success;
-        typeName = '下班打卡';
-        break;
-      case 'site_visit':
-        typeIcon = Icons.explore;
-        typeColor = const Color(0xFF3B82F6);
-        typeName = '实地考察';
-        break;
-      case 'progress':
-        typeIcon = Icons.trending_up;
-        typeColor = const Color(0xFFF59E0B);
-        typeName = '项目进度上报';
-        break;
-      case 'safety':
-        typeIcon = Icons.security;
-        typeColor = const Color(0xFFEF4444);
-        typeName = '安全检查';
-        break;
-      case 'device':
-        typeIcon = Icons.devices;
-        typeColor = const Color(0xFF8B5CF6);
-        typeName = '设备位置上报';
-        break;
-      default:
-        typeIcon = Icons.label_outline;
-        typeColor = colors.textTertiary;
-        typeName = type.isNotEmpty ? type : '打卡';
+    // 请假入口 — 所有人可见
+    features.add({
+      'icon': Icons.beach_access_outlined,
+      'title': '申请请假',
+      'description': '提交请假审批',
+      'color': const Color(0xFF06B6D4),
+      'route': '/approval/create?type=请假',
+    });
+
+    if (role == 'worker') {
+      features.add({
+        'icon': Icons.trending_up_outlined,
+        'title': '项目进度',
+        'description': '上报项目施工进度',
+        'color': const Color(0xFFF59E0B),
+        'route': null,
+      });
     }
 
-    final iconColor = isOutside ? colors.warning : typeColor;
+    if (role == 'manager' || role == 'admin') {
+      features.addAll([
+        {
+          'icon': Icons.group_outlined,
+          'title': '团队打卡',
+          'description': '查看团队打卡情况',
+          'color': const Color(0xFF10B981),
+          'route': '/team_checkins',
+        },
+        {
+          'icon': Icons.people_outline,
+          'title': '人员管理',
+          'description': '管理团队成员信息',
+          'color': const Color(0xFFF97316),
+          'route': '/personnel',
+        },
+        {
+          'icon': Icons.devices_other_outlined,
+          'title': '设备管理',
+          'description': '查看和管理设备',
+          'color': const Color(0xFF8B5CF6),
+          'route': '/devices',
+        },
+        {
+          'icon': Icons.trending_up_outlined,
+          'title': '项目进度',
+          'description': '查看项目施工进度',
+          'color': const Color(0xFFF59E0B),
+          'route': null,
+        },
+      ]);
+    }
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: BentoSpacing.space8),
-      child: BentoCard(
-        padding: const EdgeInsets.all(BentoSpacing.space12),
-        child: Row(
-          children: [
-            // 类型图标
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(BentoRadius.sm),
-              ),
-              child: Icon(
-                typeIcon,
-                color: iconColor,
-                size: 22,
-              ),
+      padding: const EdgeInsets.symmetric(horizontal: BentoSpacing.space20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: BentoSpacing.space16),
+          Text(
+            '功能入口',
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: colors.textPrimary,
+              fontWeight: FontWeight.w600,
             ),
-            const SizedBox(width: BentoSpacing.space12),
-            // 内容
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        typeName,
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          color: colors.textPrimary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Text(
-                        item.formattedTime,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: colors.textSecondary,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(
-                        isOutside ? Icons.warning_amber : Icons.location_on,
-                        size: 12,
-                        color: iconColor,
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          isOutside
-                              ? '距围栏中心 ${item.distanceToFence ?? '-'}m · 异常'
-                              : (item.projectName ?? typeName),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: isOutside
-                                ? colors.warning
-                                : colors.textSecondary,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+          ),
+          const SizedBox(height: BentoSpacing.space12),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: BentoSpacing.space12,
+              crossAxisSpacing: BentoSpacing.space12,
+              childAspectRatio: 1.4,
             ),
-            const SizedBox(width: BentoSpacing.space4),
-            // 围栏外标记
-            if (isOutside) const BentoBadge.warning(text: '围栏外'),
-            // 查看轨迹按钮
-            const SizedBox(width: 4),
-            GestureDetector(
-              onTap: () {
-                final date = item.createdAt.toIso8601String().split('T')[0];
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => TrackScreen(initialDate: date),
-                  ),
-                );
-              },
-              child: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: colors.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(6),
+            itemCount: features.length,
+            itemBuilder: (context, index) {
+              final feature = features[index];
+              final icon = feature['icon'] as IconData;
+              final title = feature['title'] as String;
+              final description = feature['description'] as String;
+              final color = feature['color'] as Color;
+              final route = feature['route'] as String?;
+
+              return BentoCard(
+                onTap: () {
+                  if (title == '项目进度') {
+                    Navigator.pushNamed(context, '/progress_workbench');
+                  } else if (title == '申请请假') {
+                    Navigator.pushNamed(context, '/approval/create',
+                        arguments: {'type': '请假'});
+                  } else if (route != null) {
+                    Navigator.pushNamed(context, route);
+                  }
+                },
+                padding: const EdgeInsets.all(BentoSpacing.space16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(BentoRadius.sm),
+                      ),
+                      child: Icon(
+                        icon,
+                        color: color,
+                        size: 24,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      title,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colors.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      description,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.textSecondary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
-                child: Icon(Icons.route, size: 16, color: colors.primary),
-              ),
-            ),
-          ],
-        ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }

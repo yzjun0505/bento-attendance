@@ -37,13 +37,62 @@ async function getProjects(req, res) {
       params
     );
 
-    // 为每个项目附加人员数量
+    // 为每个项目附加人员数量、经理和进度摘要
     for (const project of rows) {
       const [userCount] = await db.execute(
         'SELECT COUNT(*) as count FROM users WHERE project_id = ? AND status = 1',
         [project.id]
       );
       project.user_count = userCount[0].count;
+
+      const [managerRows] = await db.execute(
+        `SELECT u.id, u.name, u.username
+         FROM project_managers pm
+         INNER JOIN users u ON pm.manager_id = u.id
+         WHERE pm.project_id = ? AND u.status = 1
+         ORDER BY u.name, u.username`,
+        [project.id]
+      );
+      project.manager_count = managerRows.length;
+      project.managers = managerRows;
+
+      const [clientRows] = await db.execute(
+        `SELECT u.id, u.name, u.username
+         FROM project_clients pc
+         INNER JOIN users u ON pc.client_id = u.id
+         WHERE pc.project_id = ? AND u.status = 1
+         ORDER BY u.name, u.username`,
+        [project.id]
+      );
+      project.client_count = clientRows.length;
+      project.clients = clientRows;
+
+      try {
+        const [[progressStats]] = await db.query(`
+          SELECT
+            COUNT(*) as totalNodes,
+            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completedNodes,
+            SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as inProgressNodes,
+            SUM(CASE WHEN status = 'pending_review' THEN 1 ELSE 0 END) as pendingReviewNodes,
+            SUM(CASE WHEN plan_end_date < CURDATE() AND status != 'completed' THEN 1 ELSE 0 END) as overdueNodes,
+            ROUND(AVG(progress_percent), 1) as overallProgress
+          FROM task_nodes
+          WHERE project_id = ?
+        `, [project.id]);
+        project.totalNodes = progressStats.totalNodes || 0;
+        project.completedNodes = progressStats.completedNodes || 0;
+        project.inProgressNodes = progressStats.inProgressNodes || 0;
+        project.pendingReviewNodes = progressStats.pendingReviewNodes || 0;
+        project.overdueNodes = progressStats.overdueNodes || 0;
+        project.overallProgress = Math.round(progressStats.overallProgress || 0);
+      } catch (_) {
+        project.totalNodes = 0;
+        project.completedNodes = 0;
+        project.inProgressNodes = 0;
+        project.pendingReviewNodes = 0;
+        project.overdueNodes = 0;
+        project.overallProgress = 0;
+      }
     }
 
     res.json(successResponse({
@@ -240,4 +289,111 @@ function calculateDistance(lat1, lng1, lat2, lng2) {
   return R * c;
 }
 
-module.exports = { getProjects, getProjectById, createProject, updateProject, deleteProject, getAllProjects, getNearbyProjects };
+async function getAuthorizedProjects(req, res) {
+  try {
+    const db = getPool();
+    const userId = req.user.id;
+    const role = req.user.role;
+
+    let projects;
+    if (role === 'admin') {
+      const [rows] = await db.query('SELECT id, name, address, status FROM projects ORDER BY name');
+      projects = rows;
+    } else if (role === 'manager') {
+      const [rows] = await db.query(`
+        SELECT p.id, p.name, p.address, p.status
+        FROM projects p
+        INNER JOIN project_managers pm ON p.id = pm.project_id
+        WHERE pm.manager_id = ?
+        ORDER BY p.name
+      `, [userId]);
+      projects = rows;
+    } else if (role === 'client') {
+      const [rows] = await db.query(`
+        SELECT p.id, p.name, p.address, p.status
+        FROM projects p
+        INNER JOIN project_clients pc ON p.id = pc.project_id
+        WHERE pc.client_id = ?
+        ORDER BY p.name
+      `, [userId]);
+      projects = rows;
+    } else {
+      const [userRows] = await db.query('SELECT project_id FROM users WHERE id = ?', [userId]);
+      if (!userRows.length || !userRows[0].project_id) {
+        return res.json(successResponse({ projects: [] }));
+      }
+      const [rows] = await db.query(
+        'SELECT id, name, address, status FROM projects WHERE id = ?',
+        [userRows[0].project_id]
+      );
+      projects = rows;
+    }
+
+    const result = [];
+    for (const project of projects) {
+      let stats = { totalNodes: 0, completedNodes: 0, inProgressNodes: 0, overdueNodes: 0, pendingReviewNodes: 0, pausedNodes: 0, overallProgress: 0 };
+      try {
+        const [[s]] = await db.query(`
+          SELECT
+            COUNT(*) as totalNodes,
+            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completedNodes,
+            SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as inProgressNodes,
+            SUM(CASE WHEN status = 'pending_review' THEN 1 ELSE 0 END) as pendingReviewNodes,
+            SUM(CASE WHEN plan_end_date < CURDATE() AND status != 'completed' THEN 1 ELSE 0 END) as overdueNodes,
+            SUM(CASE WHEN status = 'paused' THEN 1 ELSE 0 END) as pausedNodes,
+            ROUND(AVG(progress_percent), 1) as overallProgress
+          FROM task_nodes
+          WHERE project_id = ?
+        `, [project.id]);
+        if (s) stats = s;
+      } catch (e) {
+        // task_nodes 表可能尚未创建，忽略
+      }
+
+      let lastReportTime = null;
+      try {
+        const [[lr]] = await db.query(`
+          SELECT MAX(created_at) as lastTime
+          FROM progress_reports pr
+          INNER JOIN task_nodes tn ON pr.node_id = tn.id
+          WHERE tn.project_id = ?
+        `, [project.id]);
+        if (lr) lastReportTime = lr.lastTime;
+      } catch (e) {
+        // progress_reports 表可能尚未创建，忽略
+      }
+
+      let assigneeCount = 0;
+      try {
+        const [[a]] = await db.query(`
+          SELECT COUNT(DISTINCT assignee_id) as count
+          FROM task_nodes
+          WHERE project_id = ? AND assignee_id IS NOT NULL
+        `, [project.id]);
+        if (a) assigneeCount = a.count;
+      } catch (e) {
+        // task_nodes 表可能尚未创建，忽略
+      }
+
+      result.push({
+        ...project,
+        totalNodes: stats.totalNodes || 0,
+        completedNodes: stats.completedNodes || 0,
+        inProgressNodes: stats.inProgressNodes || 0,
+        overdueNodes: stats.overdueNodes || 0,
+        pendingReviewNodes: stats.pendingReviewNodes || 0,
+        pausedNodes: stats.pausedNodes || 0,
+        overallProgress: Math.round(stats.overallProgress || 0),
+        lastReportTime,
+        assigneeCount,
+      });
+    }
+
+    res.json(successResponse({ projects: result }));
+  } catch (err) {
+    console.error('获取授权项目列表失败:', err);
+    res.status(500).json(errorResponse('服务器错误'));
+  }
+}
+
+module.exports = { getProjects, getProjectById, createProject, updateProject, deleteProject, getAllProjects, getNearbyProjects, getAuthorizedProjects };

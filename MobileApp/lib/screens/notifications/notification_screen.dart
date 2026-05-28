@@ -72,9 +72,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
     final success = await _notificationRepository.markAllAsRead();
     if (success && mounted) {
       setState(() {
-        _notifications = _notifications
-            .map((n) => n.copyWith(isRead: true))
-            .toList();
+        _notifications =
+            _notifications.map((n) => n.copyWith(isRead: true)).toList();
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

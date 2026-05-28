@@ -6,6 +6,21 @@ const { getPool } = require('../models/db');
 const { successResponse, errorResponse } = require('../utils/helpers');
 const logger = require('../utils/logger');
 
+const MAX_REASONABLE_SEGMENT_METERS = 50000;
+const MAX_REASONABLE_SPEED_MPS = 45;
+
+function isValidCoordinate(point) {
+  const lat = Number(point.latitude);
+  const lng = Number(point.longitude);
+  return Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180 &&
+    !(lat === 0 && lng === 0);
+}
+
 /**
  * 获取某人某天的轨迹
  * GET /api/tracks/:userId?date=2024-01-01
@@ -42,7 +57,9 @@ async function getTrack(req, res) {
     );
 
     // 合并并按时间排序
-    const allPoints = [...locationRows, ...checkinRows].sort((a, b) => {
+    const allPoints = [...locationRows, ...checkinRows]
+      .filter(isValidCoordinate)
+      .sort((a, b) => {
       return new Date(a.created_at) - new Date(b.created_at);
     });
 
@@ -61,10 +78,16 @@ async function getTrack(req, res) {
           prev.latitude, prev.longitude,
           point.latitude, point.longitude
         );
-        totalDistance += dist;
+        const seconds = Math.max((new Date(point.created_at) - new Date(prev.created_at)) / 1000, 0);
+        const speed = seconds > 0 ? dist / seconds : 0;
+        const isAnomalousSegment = dist > MAX_REASONABLE_SEGMENT_METERS ||
+          (seconds > 0 && speed > MAX_REASONABLE_SPEED_MPS);
+        if (!isAnomalousSegment) {
+          totalDistance += dist;
+        }
 
         // 检测停留点（距离小于50米且时间间隔大于5分钟）
-        if (dist < 50) {
+        if (!isAnomalousSegment && dist < 50) {
           if (!currentStay) {
             currentStay = {
               start: prev.created_at,
@@ -132,6 +155,15 @@ async function getTrack(req, res) {
 }
 
 /**
+ * 获取自己的轨迹
+ * GET /api/tracks/me?date=2024-01-01
+ */
+async function getMyTrack(req, res) {
+  req.params.userId = String(req.user.id);
+  return getTrack(req, res);
+}
+
+/**
  * 获取轨迹热力图数据（某区域内所有用户的活动密度）
  * GET /api/tracks/heatmap?date_start=&date_end=&project_id=
  */
@@ -187,4 +219,4 @@ function calculateDistance(lat1, lng1, lat2, lng2) {
   return R * c;
 }
 
-module.exports = { getTrack, getHeatmap };
+module.exports = { getTrack, getMyTrack, getHeatmap };

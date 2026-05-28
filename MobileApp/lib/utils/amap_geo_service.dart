@@ -7,11 +7,13 @@ class AmapGeoService {
   static const String _baseUrl = 'https://restapi.amap.com/v3/geocode/regeo';
   static const String _placeAroundUrl =
       'https://restapi.amap.com/v3/place/around';
+  static const String _ipUrl = 'https://restapi.amap.com/v3/ip';
 
   /// 高德 Web 服务 Key（REST API 必须使用「Web服务」类型的 Key）
   /// 注意：Android/iOS SDK Key 不能用于 REST API（会返回 USERKEY_PLAT_NOMATCH）
   /// 请在运行时通过 --dart-define=AMAP_KEY=your_key 传入
-  static const String _apiKey = String.fromEnvironment('AMAP_KEY', defaultValue: 'ae275848401da60cbf76669fdc22b450');
+  static const String _apiKey = String.fromEnvironment('AMAP_KEY',
+      defaultValue: 'ae275848401da60cbf76669fdc22b450');
 
   static final Dio _dio = Dio(BaseOptions(
     connectTimeout: const Duration(seconds: 10),
@@ -139,7 +141,8 @@ class AmapGeoService {
     int offset = 20,
   }) async {
     try {
-      debugPrint('🔍 高德周边搜索: lat=$latitude, lng=$longitude, keywords=$keywords');
+      debugPrint(
+          '🔍 高德周边搜索: lat=$latitude, lng=$longitude, keywords=$keywords');
       final response = await _dio.get(_placeAroundUrl, queryParameters: {
         'key': _apiKey,
         'location':
@@ -155,7 +158,8 @@ class AmapGeoService {
 
       if (response.statusCode == 200 && response.data != null) {
         final data = response.data;
-        debugPrint('🔍 高德周边搜索响应: status=${data['status']}, info=${data['info']}, pois数量=${data['pois']?.length ?? 0}');
+        debugPrint(
+            '🔍 高德周边搜索响应: status=${data['status']}, info=${data['info']}, pois数量=${data['pois']?.length ?? 0}');
         if (data['status'] == '1' && data['pois'] is List) {
           final places = (data['pois'] as List)
               .whereType<Map<String, dynamic>>()
@@ -174,6 +178,79 @@ class AmapGeoService {
       return const [];
     }
   }
+
+  /// 高德 IP 定位兜底。
+  ///
+  /// 只能返回城市级/区县级粗略位置，适合在系统 GPS 或网络定位失败时避免水印完全缺失定位。
+  static Future<AmapIpLocation?> locateByIp() async {
+    try {
+      final response = await _dio.get(_ipUrl, queryParameters: {
+        'key': _apiKey,
+        'output': 'json',
+      });
+
+      if (response.statusCode != 200 || response.data == null) {
+        return null;
+      }
+
+      final data = response.data;
+      if (data['status'] != '1') {
+        debugPrint('高德IP定位失败: ${data['info']}');
+        return null;
+      }
+
+      final rectangle = data['rectangle']?.toString() ?? '';
+      final center = _parseRectangleCenter(rectangle);
+      if (center == null) return null;
+
+      final province = _parseField(data['province']);
+      final city = _parseField(data['city']);
+      final address = [province, city].where((e) => e.isNotEmpty).join('');
+
+      return AmapIpLocation(
+        latitude: center.latitude,
+        longitude: center.longitude,
+        address: address.isNotEmpty ? address : null,
+      );
+    } catch (e) {
+      debugPrint('高德IP定位异常: $e');
+      return null;
+    }
+  }
+
+  static AmapIpLocation? _parseRectangleCenter(String rectangle) {
+    final points = rectangle.split(';');
+    if (points.length != 2) return null;
+
+    final first = points[0].split(',');
+    final second = points[1].split(',');
+    if (first.length != 2 || second.length != 2) return null;
+
+    final lng1 = double.tryParse(first[0]);
+    final lat1 = double.tryParse(first[1]);
+    final lng2 = double.tryParse(second[0]);
+    final lat2 = double.tryParse(second[1]);
+    if (lng1 == null || lat1 == null || lng2 == null || lat2 == null) {
+      return null;
+    }
+
+    return AmapIpLocation(
+      latitude: (lat1 + lat2) / 2,
+      longitude: (lng1 + lng2) / 2,
+    );
+  }
+}
+
+class AmapIpLocation {
+  final double latitude;
+  final double longitude;
+  final String? address;
+
+  const AmapIpLocation({
+    required this.latitude,
+    required this.longitude,
+    this.address,
+  });
 }
 
 /// 结构化地址信息

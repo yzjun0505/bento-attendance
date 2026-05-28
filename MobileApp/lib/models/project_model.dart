@@ -31,7 +31,10 @@ class Project {
       radius: json['radius'] ?? 500,
       userCount: json['user_count'] ?? 0,
       distance: json['distance']?.toInt(),
-      isInside: json['isInside'] == true || json['is_inside'] == true || json['is_inside'] == 1 || json['isInside'] == 1,
+      isInside: json['isInside'] == true ||
+          json['is_inside'] == true ||
+          json['is_inside'] == 1 ||
+          json['isInside'] == 1,
     );
   }
 

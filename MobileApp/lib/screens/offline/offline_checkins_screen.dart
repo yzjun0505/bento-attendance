@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/bento_colors.dart';
-import '../../core/bento_typography.dart';
-import '../../widgets/bento_widgets.dart';
 import '../../repositories/offline_checkin_repository.dart';
 
 class OfflineCheckinsScreen extends StatefulWidget {
@@ -43,7 +40,9 @@ class _OfflineCheckinsScreenState extends State<OfflineCheckinsScreen> {
       final synced = await _repo.syncCheckins();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('已同步 $synced 条离线打卡'), backgroundColor: Colors.green),
+          SnackBar(
+              content: Text('已同步 $synced 条离线打卡'),
+              backgroundColor: Colors.green),
         );
       }
       await _loadCached();
@@ -80,9 +79,12 @@ class _OfflineCheckinsScreenState extends State<OfflineCheckinsScreen> {
             child: Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: _cachedCount > 0 ? colors.warning.withValues(alpha: 0.1) : colors.success.withValues(alpha: 0.1),
+                    color: _cachedCount > 0
+                        ? colors.warning.withValues(alpha: 0.1)
+                        : colors.success.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
@@ -91,13 +93,16 @@ class _OfflineCheckinsScreenState extends State<OfflineCheckinsScreen> {
                       Icon(
                         _cachedCount > 0 ? Icons.cloud_off : Icons.cloud_done,
                         size: 16,
-                        color: _cachedCount > 0 ? colors.warning : colors.success,
+                        color:
+                            _cachedCount > 0 ? colors.warning : colors.success,
                       ),
                       const SizedBox(width: 6),
                       Text(
                         _cachedCount > 0 ? '$_cachedCount 条待同步' : '全部已同步',
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: _cachedCount > 0 ? colors.warning : colors.success,
+                          color: _cachedCount > 0
+                              ? colors.warning
+                              : colors.success,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -108,14 +113,19 @@ class _OfflineCheckinsScreenState extends State<OfflineCheckinsScreen> {
                 ElevatedButton.icon(
                   onPressed: _cachedCount > 0 && !_syncing ? _syncAll : null,
                   icon: _syncing
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2))
                       : const Icon(Icons.sync, size: 18),
                   label: Text(_syncing ? '同步中...' : '立即同步'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: colors.primary,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
                   ),
                 ),
               ],
@@ -125,17 +135,25 @@ class _OfflineCheckinsScreenState extends State<OfflineCheckinsScreen> {
           // 列表
           Expanded(
             child: _loading
-                ? Center(child: CircularProgressIndicator(color: colors.primary))
+                ? Center(
+                    child: CircularProgressIndicator(color: colors.primary))
                 : _checkins.isEmpty
                     ? Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.cloud_done, size: 64, color: colors.textTertiary.withValues(alpha: 0.3)),
+                            Icon(Icons.cloud_done,
+                                size: 64,
+                                color:
+                                    colors.textTertiary.withValues(alpha: 0.3)),
                             const SizedBox(height: 12),
-                            Text('没有离线打卡记录', style: theme.textTheme.bodyMedium?.copyWith(color: colors.textSecondary)),
+                            Text('没有离线打卡记录',
+                                style: theme.textTheme.bodyMedium
+                                    ?.copyWith(color: colors.textSecondary)),
                             const SizedBox(height: 4),
-                            Text('网络异常时打卡会自动缓存到这里', style: theme.textTheme.bodySmall?.copyWith(color: colors.textTertiary)),
+                            Text('网络异常时打卡会自动缓存到这里',
+                                style: theme.textTheme.bodySmall
+                                    ?.copyWith(color: colors.textTertiary)),
                           ],
                         ),
                       )
@@ -153,57 +171,76 @@ class _OfflineCheckinsScreenState extends State<OfflineCheckinsScreen> {
                             decoration: BoxDecoration(
                               color: colors.surface,
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: colors.divider.withValues(alpha: 0.5)),
+                              border: Border.all(
+                                  color: colors.divider.withValues(alpha: 0.5)),
                             ),
                             child: Row(
                               children: [
                                 Container(
-                                  width: 40, height: 40,
+                                  width: 40,
+                                  height: 40,
                                   decoration: BoxDecoration(
-                                    color: (isClockIn ? colors.success : colors.warning).withValues(alpha: 0.1),
+                                    color: (isClockIn
+                                            ? colors.success
+                                            : colors.warning)
+                                        .withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: Icon(
                                     isClockIn ? Icons.login : Icons.logout,
-                                    color: isClockIn ? colors.success : colors.warning,
+                                    color: isClockIn
+                                        ? colors.success
+                                        : colors.warning,
                                     size: 20,
                                   ),
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Row(
                                         children: [
                                           Text(
                                             isClockIn ? '上班打卡' : '下班打卡',
-                                            style: theme.textTheme.bodyMedium?.copyWith(
+                                            style: theme.textTheme.bodyMedium
+                                                ?.copyWith(
                                               color: colors.textPrimary,
                                               fontWeight: FontWeight.w600,
                                             ),
                                           ),
                                           const SizedBox(width: 8),
                                           Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 6, vertical: 2),
                                             decoration: BoxDecoration(
-                                              color: colors.warning.withValues(alpha: 0.1),
-                                              borderRadius: BorderRadius.circular(4),
+                                              color: colors.warning
+                                                  .withValues(alpha: 0.1),
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
                                             ),
-                                            child: Text('待同步', style: TextStyle(fontSize: 10, color: colors.warning)),
+                                            child: Text('待同步',
+                                                style: TextStyle(
+                                                    fontSize: 10,
+                                                    color: colors.warning)),
                                           ),
                                         ],
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
                                         item['address'] ?? '未知位置',
-                                        style: theme.textTheme.bodySmall?.copyWith(color: colors.textSecondary),
+                                        style: theme.textTheme.bodySmall
+                                            ?.copyWith(
+                                                color: colors.textSecondary),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                       Text(
                                         item['local_timestamp'] ?? '',
-                                        style: theme.textTheme.labelSmall?.copyWith(color: colors.textTertiary),
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                                color: colors.textTertiary),
                                       ),
                                     ],
                                   ),

@@ -461,7 +461,7 @@ class _AttendanceCalendarScreenState extends State<AttendanceCalendarScreen> {
       statusColor = colors.error;
       statusText = '围栏外打卡';
       statusIcon = Icons.warning_amber_rounded;
-    } else if (type == 'in') {
+    } else if (type == 'in' || type == 'clock_in') {
       statusColor = colors.success;
       statusText = '上班打卡';
       statusIcon = Icons.login;

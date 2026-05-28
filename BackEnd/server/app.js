@@ -1,5 +1,5 @@
 /**
- * 多端协同打卡人员实时移动管理系统 - 后端服务入口
+ * 境图项目协同管理平台 - 后端服务入口
  */
 require('dotenv').config();
 const express = require('express');
@@ -33,14 +33,19 @@ const scheduleRoutes = require('./routes/schedules');
 const holidayRoutes = require('./routes/holidays');
 const offlineCheckinRoutes = require('./routes/offlineCheckins');
 const trackRoutes = require('./routes/tracks');
+const taskNodeRoutes = require('./routes/taskNodes');
+const progressRoutes = require('./routes/progress');
 
 const approvalRoutes = require('./routes/approvals');
 const sessionsRoutes = require('./routes/sessions');
 const imRoutes = require('./routes/im');
 const aiRoutes = require('./routes/ai');
 const appVersionRoutes = require('./routes/appVersion');
+const projectManagerRoutes = require('./routes/projectManagers');
+const projectClientRoutes = require('./routes/projectClients');
 
 const app = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 
 // ========================
@@ -83,34 +88,7 @@ app.use(express.static(path.join(__dirname, '../dist')));
 // 文件上传目录
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// ========================
-// API 路由
-// ========================
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/checkin', checkinRoutes);
-app.use('/api/location', locationRoutes);
-app.use('/api/projects', projectRoutes);
-app.use('/api/devices', deviceRoutes);
-app.use('/api/upload', uploadRoutes);
-app.use('/api/watermarks', watermarkRoutes);
-app.use('/api/notifications', notificationRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/attendance-groups', attendanceGroupRoutes);
-app.use('/api/checkin-types', checkinTypeRoutes);
-app.use('/api/shifts', shiftRoutes);
-app.use('/api/schedules', scheduleRoutes);
-app.use('/api/holidays', holidayRoutes);
-app.use('/api/offline-checkins', offlineCheckinRoutes);
-app.use('/api/tracks', trackRoutes);
-
-app.use('/api/approvals', approvalRoutes);
-app.use('/api/sessions', sessionsRoutes);
-app.use('/api/im', imRoutes);
-app.use('/api/ai', aiRoutes);
-app.use('/api/app', appVersionRoutes);
-
-// 健康检查
+// 健康检查和版本检查需要保持公开，移动端未登录时也会调用。
 app.get('/api/health', async (req, res) => {
   // 注意：保持 HTTP 200，避免影响已有探活；通过 code/services 字段反映依赖状态
   const services = {
@@ -142,6 +120,38 @@ app.get('/api/health', async (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+app.use('/api/app', appVersionRoutes);
+
+// ========================
+// API 路由
+// ========================
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/checkin', checkinRoutes);
+app.use('/api/location', locationRoutes);
+app.use('/api/projects', projectRoutes);
+app.use('/api/devices', deviceRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/api/watermarks', watermarkRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/attendance-groups', attendanceGroupRoutes);
+app.use('/api/checkin-types', checkinTypeRoutes);
+app.use('/api/shifts', shiftRoutes);
+app.use('/api/schedules', scheduleRoutes);
+app.use('/api/holidays', holidayRoutes);
+app.use('/api/offline-checkins', offlineCheckinRoutes);
+app.use('/api/tracks', trackRoutes);
+app.use('/api', taskNodeRoutes);
+app.use('/api', progressRoutes);
+
+app.use('/api/approvals', approvalRoutes);
+app.use('/api/sessions', sessionsRoutes);
+app.use('/api/im', imRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/project-managers', projectManagerRoutes);
+app.use('/api/project-clients', projectClientRoutes);
 
 // SPA 路由回退 — 所有非 API 请求返回 index.html（测试环境跳过）
 if (process.env.NODE_ENV !== 'test') {
@@ -229,7 +239,7 @@ async function start() {
       logger.info(`服务已启动，端口: ${config.port}`);
       console.log(`
 ╔═══════════════════════════════════════════════════╗
-║   打卡人员实时移动管理系统 - 后端服务              ║
+║   境图项目协同管理平台 - 后端服务                  ║
 ║   服务地址: http://localhost:${config.port}              ║
 ║   API地址:  http://localhost:${config.port}/api           ║
 ║   管理端:   http://localhost:${config.port}               ║

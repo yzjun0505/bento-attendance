@@ -1,5 +1,5 @@
 /**
- * IM 相关路由（OpenIM）
+ * IM 相关路由（腾讯云 IM）
  */
 const express = require('express');
 const router = express.Router();

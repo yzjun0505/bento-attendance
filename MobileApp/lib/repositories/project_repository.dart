@@ -40,7 +40,8 @@ class ProjectRepository {
     int radius = 2000,
   }) async {
     try {
-      final response = await apiClient.dio.get('/projects/nearby', queryParameters: {
+      final response =
+          await apiClient.dio.get('/projects/nearby', queryParameters: {
         'latitude': latitude,
         'longitude': longitude,
         'radius': radius,

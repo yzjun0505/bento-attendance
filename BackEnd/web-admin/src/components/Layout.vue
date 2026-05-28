@@ -8,9 +8,9 @@
           <!-- Logo区 -->
           <div class="logo-wrap">
             <div class="logo-icon-box">
-              <el-icon :size="22" color="#ffffff"><Odometer /></el-icon>
+              <img :src="logoUrl" alt="境图项目协同管理平台" />
             </div>
-            <span class="logo-text">打卡管理空间</span>
+            <span class="logo-text">境图项目协同管理平台</span>
           </div>
 
           <!-- 高频导航 -->
@@ -148,12 +148,13 @@ import { useUserStore } from '@/store/user'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { getCurrentUser, updateCurrentUser, changePassword } from '@/api/users'
 import FloatingAIAssistant from '@/components/ai/FloatingAIAssistant.vue'
+import logoUrl from '@/assets/jingmap-logo.png'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 
-const roleMap = { admin: '系统管理员', manager: '项目经理', worker: '工人' }
+const roleMap = { admin: '系统管理员', manager: '项目经理', worker: '工人', client: '甲方用户' }
 const isDark = ref(true)
 
 // 导航栏隐藏/显示状态
@@ -167,6 +168,7 @@ const highFreqMenus = [
   { path: '/checkin', title: '打卡记录', icon: 'LocationFilled' },
   { path: '/users', title: '人员管理', icon: 'UserFilled' },
   { path: '/projects', title: '项目管理', icon: 'OfficeBuilding' },
+  { path: '/project-progress', title: '项目进度', icon: 'TrendCharts' },
   { path: '/tracks', title: '轨迹回放', icon: 'MapLocation' }
 ]
 
@@ -392,13 +394,19 @@ html:not(.dark) .floating-header {
 .logo-icon-box {
   width: 34px;
   height: 34px;
-  background: var(--gradient-blue);
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.16);
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.logo-icon-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .logo-text {

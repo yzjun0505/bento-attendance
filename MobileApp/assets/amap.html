@@ -244,6 +244,76 @@
       }
     }
 
+    // ====== 轨迹回放 ======
+    var _trackLine = null;
+    var _trackMarkers = [];
+
+    function drawTrack(pathJson) {
+      if (!map) return;
+      clearTrack();
+
+      var path;
+      try {
+        path = JSON.parse(pathJson);
+      } catch(e) {
+        return;
+      }
+      if (!path || path.length === 0) return;
+
+      // 绘制轨迹线
+      var linePath = path.map(function(p) { return [p.lng || p.longitude, p.lat || p.latitude]; });
+      _trackLine = new AMap.Polyline({
+        path: linePath,
+        strokeColor: '#3B82F6',
+        strokeWeight: 5,
+        strokeOpacity: 0.8,
+        lineJoin: 'round',
+        lineCap: 'round',
+        showDir: true,
+        dirColor: '#fff',
+        zIndex: 50
+      });
+      _trackLine.setMap(map);
+
+      // 起点标记
+      if (path.length > 0) {
+        var first = path[0];
+        var startMarker = new AMap.Marker({
+          position: [first.lng || first.longitude, first.lat || first.latitude],
+          content: '<div style="background:#22C55E;color:#fff;padding:3px 8px;border-radius:10px;font-size:11px;font-weight:600;white-space:nowrap;">起点</div>',
+          offset: new AMap.Pixel(-12, -30),
+          zIndex: 160
+        });
+        startMarker.setMap(map);
+        _trackMarkers.push(startMarker);
+      }
+
+      // 终点标记
+      if (path.length > 1) {
+        var last = path[path.length - 1];
+        var endMarker = new AMap.Marker({
+          position: [last.lng || last.longitude, last.lat || last.latitude],
+          content: '<div style="background:#EF4444;color:#fff;padding:3px 8px;border-radius:10px;font-size:11px;font-weight:600;white-space:nowrap;">终点</div>',
+          offset: new AMap.Pixel(-12, -30),
+          zIndex: 160
+        });
+        endMarker.setMap(map);
+        _trackMarkers.push(endMarker);
+      }
+
+      // 地图视野自适应
+      map.setFitView(null, false, [60, 60, 60, 60]);
+    }
+
+    function clearTrack() {
+      if (_trackLine) {
+        _trackLine.setMap(null);
+        _trackLine = null;
+      }
+      _trackMarkers.forEach(function(m) { m.setMap(null); });
+      _trackMarkers = [];
+    }
+
     // ====== 地图加载完成通知 ======
     window.onload = function() {
       if (typeof AMap === 'undefined') {

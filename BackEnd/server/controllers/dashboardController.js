@@ -11,6 +11,11 @@ const { getPool } = require('../models/db');
 const { successResponse, errorResponse, getTodayRange } = require('../utils/helpers');
 const logger = require('../utils/logger');
 
+const ATTENDANCE_USER_FILTER = "u.status = 1 AND u.role IN ('worker', 'manager')";
+const ATTENDANCE_ROLE_FILTER = "status = 1 AND role IN ('worker', 'manager')";
+const CLOCK_IN_TYPE_FILTER = "(c.type = 'in' OR c.type = 'clock_in')";
+const CLOCK_TYPE_FILTER = "(c.type = 'in' OR c.type = 'clock_in' OR c.type = 'out' OR c.type = 'clock_out')";
+
 /**
  * 获取看板统计数据
  * GET /api/dashboard/stats
@@ -20,11 +25,14 @@ async function getStats(req, res) {
     const db = getPool();
     const { start, end } = getTodayRange();
 
-    // 今日出勤总人数（上班打卡去重）
+    // 今日出勤总人数（上班打卡去重，只统计需要打卡的角色）
     const [attendanceRows] = await db.execute(
-      `SELECT COUNT(DISTINCT user_id) as total 
-       FROM checkins 
-       WHERE (type = 'in' OR type = 'clock_in') AND created_at >= ? AND created_at < ?`,
+      `SELECT COUNT(DISTINCT c.user_id) as total
+       FROM checkins c
+       INNER JOIN users u ON c.user_id = u.id
+       WHERE ${CLOCK_IN_TYPE_FILTER}
+         AND c.created_at >= ? AND c.created_at < ?
+         AND ${ATTENDANCE_USER_FILTER}`,
       [start, end]
     );
 
@@ -36,7 +44,8 @@ async function getStats(req, res) {
         `SELECT COUNT(DISTINCT l.user_id) as total
          FROM locations l
          INNER JOIN users u ON l.user_id = u.id
-         WHERE u.status = 1 AND l.created_at >= DATE_SUB(NOW(), INTERVAL 2 HOUR)`
+         WHERE ${ATTENDANCE_USER_FILTER}
+           AND l.created_at >= DATE_SUB(NOW(), INTERVAL 2 HOUR)`
       );
       onlineCount = locRows[0].total;
     } catch (err) {
@@ -47,9 +56,11 @@ async function getStats(req, res) {
     if (onlineCount === 0) {
       try {
         const [checkinRows] = await db.execute(
-          `SELECT COUNT(DISTINCT user_id) as total
-           FROM checkins
-           WHERE created_at >= ? AND created_at < ?`,
+          `SELECT COUNT(DISTINCT c.user_id) as total
+           FROM checkins c
+           INNER JOIN users u ON c.user_id = u.id
+           WHERE c.created_at >= ? AND c.created_at < ?
+             AND ${ATTENDANCE_USER_FILTER}`,
           [start, end]
         );
         onlineCount = checkinRows[0].total;
@@ -60,15 +71,24 @@ async function getStats(req, res) {
 
     // 异常打卡数（围栏外的上下班打卡）
     const [abnormalRows] = await db.execute(
-      `SELECT COUNT(*) as total FROM checkins 
-       WHERE (type = 'in' OR type = 'clock_in' OR type = 'out' OR type = 'clock_out') 
-         AND is_outside = 1 AND created_at >= ? AND created_at < ?`,
+      `SELECT COUNT(*) as total
+       FROM checkins c
+       INNER JOIN users u ON c.user_id = u.id
+       WHERE ${CLOCK_TYPE_FILTER}
+         AND c.is_outside = 1
+         AND c.created_at >= ? AND c.created_at < ?
+         AND ${ATTENDANCE_USER_FILTER}`,
       [start, end]
     );
 
     // 活跃工程项目数
     const [projectRows] = await db.execute(
-      `SELECT COUNT(DISTINCT project_id) as total FROM checkins WHERE created_at >= ? AND created_at < ? AND project_id IS NOT NULL`,
+      `SELECT COUNT(DISTINCT c.project_id) as total
+       FROM checkins c
+       INNER JOIN users u ON c.user_id = u.id
+       WHERE c.created_at >= ? AND c.created_at < ?
+         AND c.project_id IS NOT NULL
+         AND ${ATTENDANCE_USER_FILTER}`,
       [start, end]
     );
 
@@ -79,9 +99,12 @@ async function getStats(req, res) {
     yesterdayEnd.setDate(yesterdayEnd.getDate() - 1);
 
     const [yesterdayAttendanceRows] = await db.execute(
-      `SELECT COUNT(DISTINCT user_id) as total 
-       FROM checkins 
-       WHERE (type = 'in' OR type = 'clock_in') AND created_at >= ? AND created_at < ?`,
+      `SELECT COUNT(DISTINCT c.user_id) as total
+       FROM checkins c
+       INNER JOIN users u ON c.user_id = u.id
+       WHERE ${CLOCK_IN_TYPE_FILTER}
+         AND c.created_at >= ? AND c.created_at < ?
+         AND ${ATTENDANCE_USER_FILTER}`,
       [yesterdayStart, yesterdayEnd]
     );
     const yesterdayAttendance = yesterdayAttendanceRows[0].total;
@@ -133,8 +156,11 @@ async function getTrend(req, res) {
     const [rows] = await db.query(
       `SELECT DATE(c.created_at) as date, p.name as projectName, c.project_id, COUNT(DISTINCT c.user_id) as count
        FROM checkins c
+       INNER JOIN users u ON c.user_id = u.id
        LEFT JOIN projects p ON c.project_id = p.id
-       WHERE (c.type = 'in' OR c.type = 'clock_in') AND c.created_at >= ? AND c.created_at < ?
+       WHERE ${CLOCK_IN_TYPE_FILTER}
+         AND c.created_at >= ? AND c.created_at < ?
+         AND ${ATTENDANCE_USER_FILTER}
        GROUP BY DATE(c.created_at), c.project_id, p.name
        ORDER BY date ASC`,
       [startDate, endDateStr]
@@ -144,7 +170,7 @@ async function getTrend(req, res) {
     const [userRows] = await db.query(
       `SELECT project_id, COUNT(id) as expectedCount 
        FROM users 
-       WHERE status = 1 
+       WHERE ${ATTENDANCE_ROLE_FILTER}
        GROUP BY project_id`
     );
 
@@ -185,9 +211,9 @@ async function getDistribution(req, res) {
     const db = getPool();
     const { start, end } = getTodayRange();
 
-    // 获取所有启用用户数
+    // 获取所有需要打卡的启用用户数
     const [totalUsers] = await db.execute(
-      'SELECT COUNT(*) as total FROM users WHERE status = 1'
+      `SELECT COUNT(*) as total FROM users WHERE ${ATTENDANCE_ROLE_FILTER}`
     );
 
     // 获取考勤组默认上班时间（取第一个启用的考勤组）
@@ -198,26 +224,38 @@ async function getDistribution(req, res) {
 
     // 今日上班打卡（围栏内）的人数
     const [normalRows] = await db.execute(
-      `SELECT COUNT(DISTINCT user_id) as total 
-       FROM checkins 
-       WHERE (type = 'in' OR type = 'clock_in') AND is_outside = 0 AND created_at >= ? AND created_at < ?`,
+      `SELECT COUNT(DISTINCT c.user_id) as total
+       FROM checkins c
+       INNER JOIN users u ON c.user_id = u.id
+       WHERE ${CLOCK_IN_TYPE_FILTER}
+         AND c.is_outside = 0
+         AND c.created_at >= ? AND c.created_at < ?
+         AND ${ATTENDANCE_USER_FILTER}`,
       [start, end]
     );
 
     // 迟到人数：上班打卡时间晚于考勤组规定上班时间
     const [lateRows] = await db.execute(
-      `SELECT COUNT(DISTINCT user_id) as total 
-       FROM checkins 
-       WHERE (type = 'in' OR type = 'clock_in') AND is_outside = 0 
-         AND TIME(created_at) > ? AND created_at >= ? AND created_at < ?`,
+      `SELECT COUNT(DISTINCT c.user_id) as total
+       FROM checkins c
+       INNER JOIN users u ON c.user_id = u.id
+       WHERE ${CLOCK_IN_TYPE_FILTER}
+         AND c.is_outside = 0
+         AND TIME(c.created_at) > ?
+         AND c.created_at >= ? AND c.created_at < ?
+         AND ${ATTENDANCE_USER_FILTER}`,
       [defaultStartTime, start, end]
     );
 
     // 围栏外打卡（也算异常，归入迟到或单独统计）
     const [outsideRows] = await db.execute(
-      `SELECT COUNT(DISTINCT user_id) as total 
-       FROM checkins 
-       WHERE (type = 'in' OR type = 'clock_in') AND is_outside = 1 AND created_at >= ? AND created_at < ?`,
+      `SELECT COUNT(DISTINCT c.user_id) as total
+       FROM checkins c
+       INNER JOIN users u ON c.user_id = u.id
+       WHERE ${CLOCK_IN_TYPE_FILTER}
+         AND c.is_outside = 1
+         AND c.created_at >= ? AND c.created_at < ?
+         AND ${ATTENDANCE_USER_FILTER}`,
       [start, end]
     );
 
@@ -264,8 +302,9 @@ async function getAnomalies(req, res) {
        FROM checkins c
        LEFT JOIN users u ON c.user_id = u.id
        LEFT JOIN projects p ON c.project_id = p.id
-       WHERE (c.type = 'in' OR c.type = 'clock_in')
+       WHERE ${CLOCK_IN_TYPE_FILTER}
          AND (c.is_outside = 1 OR TIME(c.created_at) > ?)
+         AND ${ATTENDANCE_USER_FILTER}
        ORDER BY c.created_at DESC
        LIMIT ${limit}`,
       [defaultStartTime, defaultStartTime]

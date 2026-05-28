@@ -26,7 +26,8 @@ class SubmitCheckin extends AttendanceEvent {
   });
 
   @override
-  List<Object?> get props => [type, projectId, remark, photoPath, watermarkCode];
+  List<Object?> get props =>
+      [type, projectId, remark, photoPath, watermarkCode];
 }
 
 class UpdateCurrentLocation extends AttendanceEvent {

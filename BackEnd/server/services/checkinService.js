@@ -285,6 +285,14 @@ async function insertCheckinInTransaction(db, { userId, data, source = 'online' 
 }
 
 async function createCheckin(db, { userId, data, source = 'online', notifyManagers = true }) {
+  // 管理员无需打卡
+  const [[userCheck]] = await db.execute('SELECT role FROM users WHERE id = ?', [userId]);
+  if (userCheck && userCheck.role === 'admin') {
+    const err = new Error('管理员无需打卡');
+    err.status = 400;
+    throw err;
+  }
+
   const connection = await db.getConnection();
   let inserted;
   try {

@@ -15,3 +15,10 @@ export function getProfile() {
 export function changePassword(data) {
   return request.put('/auth/password', data)
 }
+
+export function refreshSession(refreshToken) {
+  return request.post('/sessions/refresh', { refresh_token: refreshToken }, {
+    skipAuthRefresh: true,
+    skipErrorMessage: true
+  })
+}

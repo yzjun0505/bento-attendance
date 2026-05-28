@@ -29,18 +29,44 @@ class CoordUtils {
   }
 
   static double _transformLat(double x, double y) {
-    double ret = -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * math.sqrt(x.abs());
-    ret += (20.0 * math.sin(6.0 * x * math.pi) + 20.0 * math.sin(2.0 * x * math.pi)) * 2.0 / 3.0;
-    ret += (20.0 * math.sin(y * math.pi) + 40.0 * math.sin(y / 3.0 * math.pi)) * 2.0 / 3.0;
-    ret += (160.0 * math.sin(y / 12.0 * math.pi) + 320 * math.sin(y * math.pi / 30.0)) * 2.0 / 3.0;
+    double ret = -100.0 +
+        2.0 * x +
+        3.0 * y +
+        0.2 * y * y +
+        0.1 * x * y +
+        0.2 * math.sqrt(x.abs());
+    ret += (20.0 * math.sin(6.0 * x * math.pi) +
+            20.0 * math.sin(2.0 * x * math.pi)) *
+        2.0 /
+        3.0;
+    ret += (20.0 * math.sin(y * math.pi) + 40.0 * math.sin(y / 3.0 * math.pi)) *
+        2.0 /
+        3.0;
+    ret += (160.0 * math.sin(y / 12.0 * math.pi) +
+            320 * math.sin(y * math.pi / 30.0)) *
+        2.0 /
+        3.0;
     return ret;
   }
 
   static double _transformLng(double x, double y) {
-    double ret = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * math.sqrt(x.abs());
-    ret += (20.0 * math.sin(6.0 * x * math.pi) + 20.0 * math.sin(2.0 * x * math.pi)) * 2.0 / 3.0;
-    ret += (20.0 * math.sin(x * math.pi) + 40.0 * math.sin(x / 3.0 * math.pi)) * 2.0 / 3.0;
-    ret += (150.0 * math.sin(x / 12.0 * math.pi) + 300.0 * math.sin(x / 30.0 * math.pi)) * 2.0 / 3.0;
+    double ret = 300.0 +
+        x +
+        2.0 * y +
+        0.1 * x * x +
+        0.1 * x * y +
+        0.1 * math.sqrt(x.abs());
+    ret += (20.0 * math.sin(6.0 * x * math.pi) +
+            20.0 * math.sin(2.0 * x * math.pi)) *
+        2.0 /
+        3.0;
+    ret += (20.0 * math.sin(x * math.pi) + 40.0 * math.sin(x / 3.0 * math.pi)) *
+        2.0 /
+        3.0;
+    ret += (150.0 * math.sin(x / 12.0 * math.pi) +
+            300.0 * math.sin(x / 30.0 * math.pi)) *
+        2.0 /
+        3.0;
     return ret;
   }
 }

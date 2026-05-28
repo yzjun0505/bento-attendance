@@ -1,22 +1,71 @@
+/**
+ * AI 可调用工具定义与执行
+ *
+ * 职责：AI 助手的"工具库"——实现所有可查询、可操作的后端能力。
+ *
+ * 架构说明：
+ *   本模块是"模板引擎"模式的核心：所有数据查询都在 Node 侧完成，
+ *   返回结构化结果给 aiChatService，再由大模型润色成自然语言。
+ *   大模型不直接访问数据库（安全 + 权限可控）。
+ *
+ * 工具分为两类：
+ *   【查询类】直接执行，立即返回数据：
+ *     getDashboardSummary    — 仪表盘摘要（出勤/异常/审批 一览卡）
+ *     getAttendanceAnomalies — 异常打卡列表
+ *     getProjectStats        — 项目外勤统计 + 柱状图
+ *     getEmployeeAttendance  — 单个员工考勤记录
+ *     getWatermarkCodeLookup — 防伪码溯源
+ *     getTrackSummary        — 轨迹回放 + 总里程
+ *     getApprovalSummary     — 审批列表
+ *
+ *   【操作类】先写入 ai_action_requests 待确认表，用户确认后由 executeConfirmedAction() 执行：
+ *     createReportAction       → export_attendance_report
+ *     createNotificationAction → send_notification
+ *     createProjectAction      → create_project
+ *     createScheduleAction     → create_schedule
+ *
+ * 所有函数都通过 permissions.scopeXxxWhere() 做数据权限过滤。
+ */
+
 const { getPool } = require('../../models/db');
 const notificationService = require('../notificationService');
 const permissions = require('./aiPermissions');
+const watermarkLookup = require('../watermarkLookupService');
 
+// ============================================================
+// 工具函数 — 日期/时间/格式化
+// ============================================================
+
+// 打卡类型常量：哪些 type 算"上班打卡"
 const CHECKIN_IN_TYPES = ['in', 'clock_in'];
 const CHECKIN_OUT_TYPES = ['out', 'clock_out'];
 
+/** 补零 */
 function pad(n) {
   return String(n).padStart(2, '0');
 }
 
+/** 格式化为 yyyy-MM-dd HH:mm:ss */
 function formatDateTime(date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
+/** 格式化为 yyyy-MM-dd */
 function formatDate(date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+/**
+ * 从用户消息中解析时间范围
+ *
+ * 支持的自然语言：
+ *   "今天" / "昨天" / "本周" / "本月" / "最近 N 天"
+ *   也支持 context.filters 中显式传入的 date_start/date_end
+ *
+ * 默认：最近 7 天
+ *
+ * @returns {{ start, end, label }} — start/end 是格式化字符串，label 是中文标签
+ */
 function parseDateRange(message = '', context = {}) {
   const filters = context.filters || {};
   if (filters.date_start && filters.date_end) {
@@ -33,7 +82,7 @@ function parseDateRange(message = '', context = {}) {
   const normalized = String(message);
   const daysMatch = normalized.match(/最近\s*(\d+)\s*天/);
   if (daysMatch) {
-    const days = Math.min(Math.max(Number(daysMatch[1]), 1), 90);
+    const days = Math.min(Math.max(Number(daysMatch[1]), 1), 90);              // 最多 90 天
     const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - days + 1);
     const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
     return { start: formatDateTime(start), end: formatDateTime(end), label: `最近${days}天` };
@@ -64,15 +113,18 @@ function parseDateRange(message = '', context = {}) {
     return { start: formatDateTime(start), end: formatDateTime(end), label: '今天' };
   }
 
+  // 默认最近 7 天
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
   const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
   return { start: formatDateTime(start), end: formatDateTime(end), label: '最近7天' };
 }
 
+/** JSON 序列化（容错） */
 function toJson(value) {
   return JSON.stringify(value || {});
 }
 
+/** JSON 反序列化（容错） */
 function fromJson(value) {
   if (!value) return {};
   if (typeof value === 'object') return value;
@@ -83,10 +135,14 @@ function fromJson(value) {
   }
 }
 
+/** 去除末尾的语气助词（"的呢吗吧啊呀"） */
 function stripTrailingParticle(value = '') {
   return String(value).replace(/[的呢吗吧啊呀\s]+$/g, '').trim();
 }
 
+/**
+ * 生成 ECharts 图表数据（供前端渲染柱状图等）
+ */
 function buildChart(title, rows, nameKey, valueKey, chartType = 'bar') {
   return {
     title,
@@ -102,6 +158,13 @@ function buildChart(title, rows, nameKey, valueKey, chartType = 'bar') {
   };
 }
 
+// ============================================================
+// 信息提取 — 从自然语言中提取结构化信息
+// ============================================================
+
+/**
+ * 获取系统默认上班时间（用于判断"迟到"）
+ */
 async function getDefaultStartTime(db) {
   const [rows] = await db.execute(
     `SELECT work_start_time FROM attendance_groups WHERE status = 1 ORDER BY id LIMIT 1`
@@ -109,17 +172,30 @@ async function getDefaultStartTime(db) {
   return rows[0]?.work_start_time || '09:00:00';
 }
 
+// ============================================================
+// 查询工具 — 数据库查询，受权限控制
+// ============================================================
+
+/**
+ * 📊 仪表盘摘要
+ *
+ * 返回一张"管理卡片"：可见员工数、出勤人数、异常数、活跃项目数、待审批数。
+ * 这是 AI 助手默认调用的入口（用户问"今天概况"时）。
+ */
 async function getDashboardSummary(actor, context = {}, message = '') {
   const db = getPool();
   const range = parseDateRange(message, context);
-  const userScope = permissions.scopeUserWhere(actor, 'u');
-  const checkinScope = permissions.scopeCheckinWhere(actor, 'c');
-  const approvalScope = permissions.scopeUserWhere(actor, 'u');
+  const userScope = permissions.scopeUserWhere(actor, 'u');         // 用户数据范围
+  const checkinScope = permissions.scopeCheckinWhere(actor, 'c');   // 打卡数据范围
+  const approvalScope = permissions.scopeUserWhere(actor, 'u');     // 审批数据范围
 
+  // 可见员工数（受权限过滤）
   const [userRows] = await db.execute(
     `SELECT COUNT(*) as total FROM users u WHERE u.status = 1${userScope.sql}`,
     userScope.params
   );
+
+  // 出勤人数（在时间范围内有上班打卡记录的独立用户数）
   const [attendanceRows] = await db.execute(
     `SELECT COUNT(DISTINCT c.user_id) as total
      FROM checkins c
@@ -127,6 +203,8 @@ async function getDashboardSummary(actor, context = {}, message = '') {
        AND c.type IN (?, ?)${checkinScope.sql}`,
     [range.start, range.end, ...CHECKIN_IN_TYPES, ...checkinScope.params]
   );
+
+  // 异常打卡数（围栏外 OR 晚于默认上班时间）
   const [abnormalRows] = await db.execute(
     `SELECT COUNT(*) as total
      FROM checkins c
@@ -134,6 +212,8 @@ async function getDashboardSummary(actor, context = {}, message = '') {
        AND (c.is_outside = 1 OR (c.type IN (?, ?) AND TIME(c.created_at) > ?))${checkinScope.sql}`,
     [range.start, range.end, ...CHECKIN_IN_TYPES, await getDefaultStartTime(db), ...checkinScope.params]
   );
+
+  // 活跃项目数（有打卡记录的独立项目数）
   const [projectRows] = await db.execute(
     `SELECT COUNT(DISTINCT c.project_id) as total
      FROM checkins c
@@ -141,6 +221,8 @@ async function getDashboardSummary(actor, context = {}, message = '') {
        AND c.project_id IS NOT NULL${checkinScope.sql}`,
     [range.start, range.end, ...checkinScope.params]
   );
+
+  // 待审批数
   const [pendingRows] = await db.execute(
     `SELECT COUNT(*) as total
      FROM approval_requests a
@@ -166,6 +248,11 @@ async function getDashboardSummary(actor, context = {}, message = '') {
   };
 }
 
+/**
+ * 🔴 异常打卡列表
+ *
+ * 异常定义：围栏外打卡（is_outside=1）OR 上班打卡时间晚于考勤组规定时间
+ */
 async function getAttendanceAnomalies(actor, context = {}, message = '') {
   const db = getPool();
   const range = parseDateRange(message, context);
@@ -215,6 +302,11 @@ async function getAttendanceAnomalies(actor, context = {}, message = '') {
   };
 }
 
+/**
+ * 📂 项目外勤打卡统计
+ *
+ * 按项目聚合打卡数据（打卡次数/人数/围栏外次数），附带 ECharts 柱状图数据。
+ */
 async function getProjectStats(actor, context = {}, message = '') {
   const db = getPool();
   const range = parseDateRange(message, context);
@@ -252,6 +344,20 @@ async function getProjectStats(actor, context = {}, message = '') {
   };
 }
 
+// ============================================================
+// 员工查找 — 根据姓名/关键词查找当前用户可见的员工
+// ============================================================
+
+/**
+ * 在权限范围内查找员工
+ *
+ * 规则：
+ *   keyword 为空 → 默认查当前用户自己
+ *   keyword 有值 → 模糊匹配 name 或 username
+ *   仅返回第一条匹配记录
+ *
+ * 权限：通过 scopeUserWhere 过滤
+ */
 async function findVisibleUser(actor, keyword = '') {
   const db = getPool();
   const scope = permissions.scopeUserWhere(actor, 'u');
@@ -272,6 +378,13 @@ async function findVisibleUser(actor, keyword = '') {
   return rows[0] || null;
 }
 
+// ============================================================
+// NLP 信息提取 — 从自然语言文本中提取结构化字段
+// ============================================================
+
+/**
+ * 从消息中提取可能的姓名（用于"张三最近考勤怎么样"）
+ */
 function extractPossibleName(message) {
   const text = String(message || '').trim();
   const match = text.match(/(?:员工|人员|用户|工人)?\s*([一-龥A-Za-z0-9_]{2,20})\s*(?:的)?(?:最近|本周|本月|今天|考勤|打卡|记录|情况|迟到|是否|正常)/);
@@ -281,17 +394,241 @@ function extractPossibleName(message) {
   return value;
 }
 
+/**
+ * 从排班指令中提取员工名（"把张三明天安排白班" → "张三"）
+ */
 function extractScheduleUserName(message) {
   const text = String(message || '').trim();
   const match = text.match(/(?:把|给|为)\s*([一-龥A-Za-z0-9_]{2,20})(?:今天|明天|后天|\d{4}-\d{1,2}-\d{1,2}|安排|排班|设为|上)/);
   return match ? match[1] : '';
 }
 
+/**
+ * 从消息中提取班次关键词（"白班"/"早班"/"晚班"/"夜班"）
+ */
 function extractShiftKeyword(message) {
   const text = String(message || '');
   return ['白班', '早班', '晚班', '夜班'].find((name) => text.includes(name)) || '';
 }
 
+/**
+ * 从消息中提取防伪码（匹配 8 位以上的十六进制字符）
+ */
+function extractWatermarkCode(message = '') {
+  const candidates = String(message).match(/[A-Fa-f0-9][A-Fa-f0-9\-\s]{5,}[A-Fa-f0-9]/g) || [];
+  return candidates
+    .map(watermarkLookup.normalizeWatermarkCode)
+    .find((code) => code.length >= 8) || '';
+}
+
+/**
+ * 从消息中提取日期词（"明天"/"后天"/YYYY-MM-DD）
+ */
+function extractDateWord(message) {
+  const now = new Date();
+  if (/明天/.test(message)) {
+    return formatDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1));
+  }
+  if (/后天/.test(message)) {
+    return formatDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2));
+  }
+  const match = String(message).match(/(\d{4}-\d{1,2}-\d{1,2})/);
+  if (match) return match[1];
+  return formatDate(now);
+}
+
+// ============================================================
+// 地理工具 — 距离计算 & 坐标校验
+// ============================================================
+
+/** 格式化距离：<1000m 显示米，>=1000m 显示公里 */
+function formatDistanceMeters(meters) {
+  const value = Number(meters || 0);
+  if (value < 1000) return `${Math.round(value)} m`;
+  return `${(value / 1000).toFixed(2)} km`;
+}
+
+/** 判断坐标是否合法（经度 -180~180，纬度 -90~90，且不为 0,0） */
+function isValidCoordinate(point) {
+  const lat = Number(point.latitude);
+  const lng = Number(point.longitude);
+  return Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180 &&
+    !(lat === 0 && lng === 0);
+}
+
+/** Haversine 公式 — 计算两点间球面距离（单位：米） */
+function calculateDistance(lat1, lng1, lat2, lng2) {
+  const R = 6371000;                                                    // 地球半径（米）
+  const dLat = (Number(lat2) - Number(lat1)) * Math.PI / 180;
+  const dLng = (Number(lng2) - Number(lng1)) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(Number(lat1) * Math.PI / 180) * Math.cos(Number(lat2) * Math.PI / 180) *
+    Math.sin(dLng / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+/**
+ * 计算轨迹总里程 — 逐点累加 Haversine 距离，过滤噪声跳点。
+ * 数据来源：locations（GPS 实时上报）+ checkins（打卡位置）合并后按时间排序。
+ */
+function calculateTrackDistance(points) {
+  let total = 0;
+  for (let i = 1; i < points.length; i += 1) {
+    const prev = points[i - 1];
+    const point = points[i];
+    const dist = calculateDistance(prev.latitude, prev.longitude, point.latitude, point.longitude);
+    const seconds = Math.max((new Date(point.created_at) - new Date(prev.created_at)) / 1000, 0);
+    const speed = seconds > 0 ? dist / seconds : 0;
+    if (dist <= 50000 && (seconds === 0 || speed <= 45)) {
+      total += dist;
+    }
+  }
+  return Math.round(total);
+}
+
+// ============================================================
+// 查询工具（续）
+// ============================================================
+
+/**
+ * 🔍 防伪码溯源 — 根据防伪码查找对应的打卡记录或进度上报
+ */
+async function getWatermarkCodeLookup(actor, context = {}, message = '') {
+  const db = getPool();
+  const code = context.watermarkCode || extractWatermarkCode(message);
+  if (!code) {
+    return {
+      type: 'clarification',
+      title: '防伪码查询',
+      message: '可以查询防伪码，请把完整防伪码发给我。',
+      prompts: ['防伪码或水印码'],
+    };
+  }
+
+  const checkinScope = permissions.scopeCheckinWhere(actor, 'c');
+  const userScope = permissions.scopeUserWhere(actor, 'u');
+  const lookup = await watermarkLookup.lookupWatermarkCode(db, code, {
+    checkinScope: checkinScope.sql,
+    checkinParams: checkinScope.params,
+    userScope: userScope.sql,
+    userParams: userScope.params,
+  });
+
+  if (!lookup.found) {
+    return {
+      type: 'summary',
+      title: '防伪码查询',
+      message: `没有查到防伪码 ${lookup.code} 对应的打卡、进度上报或预占记录。`,
+      cards: [{ label: '查询结果', value: '未找到' }],
+      rows: [],
+    };
+  }
+
+  const row = lookup.data;
+  const hasCheckin = lookup.kind === 'checkin';
+  const hasProgress = lookup.kind === 'progress_report';
+  return {
+    type: 'table',
+    title: '防伪码查询',
+    message: hasCheckin
+      ? `防伪码 ${row.watermark_code} 对应一条${row.project_name ? `「${row.project_name}」` : ''}打卡记录，状态为${row.code_status_text || '防伪码已使用'}。`
+      : hasProgress
+        ? `防伪码 ${row.watermark_code} 对应一条${row.project_name ? `「${row.project_name}」` : ''}项目进度上报，状态为${row.code_status_text || '防伪码已使用'}。`
+      : `防伪码 ${row.watermark_code} 已生成但尚未绑定打卡记录，状态为${row.code_status_text}。`,
+    cards: [
+      { label: '防伪码', value: row.watermark_code },
+      { label: '状态', value: row.code_status_text || row.code_status || '-' },
+      { label: '打卡人', value: row.user_name || row.username || '-' },
+      { label: '项目', value: row.project_name || '-' },
+      { label: '业务类型', value: row.record_type_text || (hasCheckin ? '打卡记录' : '预占码') },
+    ],
+    columns: [
+      { prop: 'watermark_code', label: '防伪码' },
+      { prop: 'code_status_text', label: '状态' },
+      { prop: 'record_type_text', label: '业务类型' },
+      { prop: 'user_name', label: '打卡人' },
+      { prop: 'project_name', label: '项目' },
+      { prop: 'created_at', label: '时间' },
+      { prop: 'address', label: '地点' },
+    ],
+    rows: [row],
+  };
+}
+
+/**
+ * 📍 轨迹回放 + 总里程统计
+ * 合并 locations 和 checkins 两张表的坐标数据，按时间排序后计算总里程。
+ */
+async function getTrackSummary(actor, context = {}, message = '') {
+  const db = getPool();
+  const date = context.date || extractDateWord(message);
+  const keyword = context.employeeName || context.lastEmployeeName || extractPossibleName(message);
+  const target = await findVisibleUser(actor, keyword);
+  if (!target) {
+    return {
+      type: 'summary',
+      title: '轨迹查询',
+      message: keyword ? `没有找到你有权限查看的员工：${keyword}。` : '没有找到可查看的员工。请补充员工姓名或先查询自己的轨迹。',
+      cards: [],
+    };
+  }
+
+  const [locationRows] = await db.execute(
+    `SELECT id, latitude, longitude, accuracy, speed, address, created_at, 'location' as source
+     FROM locations
+     WHERE user_id = ? AND DATE(created_at) = ?
+     ORDER BY created_at ASC`,
+    [target.id, date]
+  );
+  const [checkinRows] = await db.execute(
+    `SELECT id, latitude, longitude, address, type, photo, remark, created_at, 'checkin' as source
+     FROM checkins
+     WHERE user_id = ? AND DATE(created_at) = ? AND latitude IS NOT NULL AND longitude IS NOT NULL
+     ORDER BY created_at ASC`,
+    [target.id, date]
+  );
+  const points = [...locationRows, ...checkinRows]
+    .filter(isValidCoordinate)
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  const totalDistance = calculateTrackDistance(points);
+
+  return {
+    type: 'table',
+    title: `${target.name || target.username} ${date}轨迹`,
+    subject: {
+      type: 'employee',
+      id: target.id,
+      name: target.name || target.username,
+      username: target.username,
+    },
+    message: `${target.name || target.username} 在 ${date} 共有 ${points.length} 个轨迹点，总里程 ${formatDistanceMeters(totalDistance)}。`,
+    cards: [
+      { label: '员工', value: target.name || target.username },
+      { label: '日期', value: date },
+      { label: '轨迹点数', value: points.length },
+      { label: '总里程', value: formatDistanceMeters(totalDistance) },
+    ],
+    columns: [
+      { prop: 'created_at', label: '时间' },
+      { prop: 'source', label: '来源' },
+      { prop: 'address', label: '地点' },
+      { prop: 'latitude', label: '纬度' },
+      { prop: 'longitude', label: '经度' },
+    ],
+    rows: points.slice(0, 30),
+  };
+}
+
+/**
+ * 👤 单个员工考勤记录 — 返回时间范围内的所有打卡
+ * 支持"他/她/该员工"指代（通过 context.lastEmployeeName）
+ */
 async function getEmployeeAttendance(actor, context = {}, message = '') {
   const db = getPool();
   const range = parseDateRange(message, context);
@@ -350,6 +687,9 @@ async function getEmployeeAttendance(actor, context = {}, message = '') {
   };
 }
 
+/**
+ * 📋 审批列表 — 默认查 pending，可识别"已通过"/"拒绝"
+ */
 async function getApprovalSummary(actor, context = {}, message = '') {
   const db = getPool();
   const scope = permissions.scopeUserWhere(actor, 'u');
@@ -389,6 +729,14 @@ async function getApprovalSummary(actor, context = {}, message = '') {
   };
 }
 
+// ============================================================
+// 操作工具 — 创建待确认操作 & 执行确认后的操作
+// ============================================================
+
+/**
+ * 创建一条 pending 状态的 ai_action_request
+ * AI 的"写操作"不会立即执行，而是先写入此表等用户确认。
+ */
 async function createPendingAction({ actor, conversationId, actionType, title, payload }) {
   const db = getPool();
   const [result] = await db.execute(
@@ -405,6 +753,9 @@ async function createPendingAction({ actor, conversationId, actionType, title, p
   };
 }
 
+/**
+ * 导出报表操作 — 写入 pending action，用户确认后生成下载链接
+ */
 async function createReportAction(actor, conversationId, context = {}, message = '') {
   const range = parseDateRange(message, context);
   const action = await createPendingAction({
@@ -423,6 +774,9 @@ async function createReportAction(actor, conversationId, context = {}, message =
   };
 }
 
+/**
+ * 发送通知操作 — 支持发给特定员工或所有可见员工
+ */
 async function createNotificationAction(actor, conversationId, context = {}, message = '') {
   if (!permissions.canManage(actor)) {
     return {
@@ -470,12 +824,16 @@ async function createNotificationAction(actor, conversationId, context = {}, mes
   };
 }
 
+/** 从消息中提取项目名 */
 function extractProjectName(message) {
   const text = String(message || '').trim();
   const match = text.match(/(?:新增|创建|添加|新建)\s*(?:一个)?(?:项目)?\s*([一-龥A-Za-z0-9_\-]{2,40})?/);
   return stripTrailingParticle(match?.[1] || '');
 }
 
+/**
+ * 新增项目操作 — 需要项目名称、地址、围栏半径
+ */
 async function createProjectAction(actor, conversationId, context = {}, message = '') {
   if (!permissions.canManage(actor)) {
     return {
@@ -530,6 +888,9 @@ function extractDateWord(message) {
   return formatDate(now);
 }
 
+/**
+ * 排班操作 — 为用户指定日期安排班次
+ */
 async function createScheduleAction(actor, conversationId, context = {}, message = '') {
   if (!permissions.canManage(actor)) {
     return {
@@ -594,6 +955,17 @@ async function createScheduleAction(actor, conversationId, context = {}, message
   };
 }
 
+/**
+ * 🔐 执行确认后的操作
+ *
+ * 用户确认后，根据 action_type 真正执行：
+ *   send_notification → 调用 notificationService 发送通知
+ *   create_schedule   → 写入 user_schedules 表
+ *   export_attendance_report → 生成下载链接
+ *   create_project    → 写入 projects 表
+ *
+ * 执行完成后：更新 action status 为 confirmed + 写入 ai_audit_logs 审计日志
+ */
 async function executeConfirmedAction(actor, actionId, ipAddress) {
   const db = getPool();
   const [rows] = await db.execute(
@@ -731,6 +1103,8 @@ module.exports = {
   getAttendanceAnomalies,
   getProjectStats,
   getEmployeeAttendance,
+  getWatermarkCodeLookup,
+  getTrackSummary,
   getApprovalSummary,
   createReportAction,
   createNotificationAction,

@@ -71,19 +71,22 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _pickAndUploadAvatar() async {
     try {
-      final XFile? image = await _picker.pickImage(source: ImageSource.gallery, maxWidth: 1024, maxHeight: 1024);
+      final XFile? image = await _picker.pickImage(
+          source: ImageSource.gallery, maxWidth: 1024, maxHeight: 1024);
       if (image == null) return;
 
       setState(() => _isLoading = true);
-      
+
       final formData = FormData.fromMap({
         'photo': await MultipartFile.fromFile(image.path, filename: image.name),
       });
 
-      final response = await ApiClient().dio.post('/upload/photo', data: formData);
+      final response =
+          await ApiClient().dio.post('/upload/photo', data: formData);
       if (response.statusCode == 200 && response.data['code'] == 200) {
+        final uploadedUrl = response.data['data']?['url']?.toString();
         setState(() {
-          _avatarUrl = response.data['data']['url'];
+          _avatarUrl = ApiClient.resolveFileUrl(uploadedUrl);
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -112,8 +115,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     try {
       final updatedUser = await _userRepository.updateProfile(
         name: _nameController.text.trim(),
-        phone: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
-        email: _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
+        phone: _phoneController.text.trim().isEmpty
+            ? null
+            : _phoneController.text.trim(),
+        email: _emailController.text.trim().isEmpty
+            ? null
+            : _emailController.text.trim(),
         avatar: _avatarUrl,
       );
 
@@ -234,7 +241,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           keyboardType: TextInputType.emailAddress,
                           validator: (value) {
                             if (value != null && value.isNotEmpty) {
-                              if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                              if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                                  .hasMatch(value)) {
                                 return '请输入正确的邮箱地址';
                               }
                             }

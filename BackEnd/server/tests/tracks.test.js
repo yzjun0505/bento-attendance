@@ -50,6 +50,11 @@ describe('轨迹回放 API 测试', () => {
       .post('/api/location/report')
       .set('Authorization', `Bearer ${workerToken}`)
       .send({ latitude: 39.9050, longitude: 116.4080, address: '位置2' });
+
+    await request(app)
+      .post('/api/location/report')
+      .set('Authorization', `Bearer ${workerToken}`)
+      .send({ latitude: 31.2304, longitude: 121.4737, address: '异常跳点' });
   });
 
   // ========== 获取个人轨迹 ==========
@@ -68,6 +73,17 @@ describe('轨迹回放 API 测试', () => {
       expect(res.body.data).toHaveProperty('total_distance');
       expect(res.body.data).toHaveProperty('stay_points');
       expect(Array.isArray(res.body.data.track)).toBe(true);
+    });
+
+    test('异常远距离跳点不会产生夸张总里程', async () => {
+      const today = new Date().toISOString().slice(0, 10);
+      const res = await request(app)
+        .get(`/api/tracks/${workerId}?date=${today}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.total_points).toBeGreaterThanOrEqual(3);
+      expect(res.body.data.total_distance).toBeLessThan(50000);
     });
 
     test('缺少日期返回 400', async () => {

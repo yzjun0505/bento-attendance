@@ -98,17 +98,17 @@
               <span v-else style="color: #999; font-size: 12px;">—</span>
             </template>
           </el-table-column>
-          <el-table-column prop="anti_fake_code" label="防伪码" width="160">
+          <el-table-column prop="watermark_code" label="防伪码" width="160">
             <template #default="{ row }">
               <el-link
-                v-if="row.anti_fake_code"
+                v-if="getWatermarkCode(row)"
                 type="primary"
                 :underline="false"
                 class="code-link"
-                @click="goToAntiFakeQuery(row.anti_fake_code)"
+                @click="goToAntiFakeQuery(getWatermarkCode(row))"
               >
                 <el-icon><Ticket /></el-icon>
-                {{ row.anti_fake_code }}
+                {{ getWatermarkCode(row) }}
               </el-link>
               <span v-else style="color: #999; font-size: 12px;">—</span>
             </template>
@@ -188,9 +188,9 @@
                   距离中心: {{ Math.round(row.distance_to_fence) }}米
                   <el-tag v-if="row.is_outside" type="danger" size="small" style="margin-left: 4px;">围栏外</el-tag>
                 </div>
-                <div class="info-code" v-if="row.anti_fake_code">
-                  <el-link type="primary" :underline="false" class="code-link" @click.stop="goToAntiFakeQuery(row.anti_fake_code)">
-                    <el-icon><Ticket /></el-icon> {{ row.anti_fake_code }}
+                <div class="info-code" v-if="getWatermarkCode(row)">
+                  <el-link type="primary" :underline="false" class="code-link" @click.stop="goToAntiFakeQuery(getWatermarkCode(row))">
+                    <el-icon><Ticket /></el-icon> {{ getWatermarkCode(row) }}
                   </el-link>
                 </div>
               </div>
@@ -281,6 +281,7 @@ async function loadData() {
   try {
     const params = {
       ...filters,
+      scope: 'team',
       page: pagination.page,
       pageSize: pagination.pageSize
     }
@@ -328,6 +329,10 @@ function getPhotoUrl(photo) {
   return baseUrl + photo
 }
 
+function getWatermarkCode(row) {
+  return row.watermark_code || row.anti_fake_code || ''
+}
+
 function showPhoto(photo) {
   currentPhotoUrl.value = getPhotoUrl(photo)
   photoDialogVisible.value = true
@@ -339,7 +344,8 @@ function goToAntiFakeQuery(code) {
 
 async function handleExport() {
   const params = {
-    ...filters
+    ...filters,
+    scope: 'team'
   }
   if (dateRange.value && dateRange.value.length === 2) {
     params.date_start = dateRange.value[0] + ' 00:00:00'

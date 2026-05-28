@@ -90,8 +90,8 @@ class BentoLoadingOverlay extends StatelessWidget {
                       Text(
                         message!,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: colors.textSecondary,
-                        ),
+                              color: colors.textSecondary,
+                            ),
                       ),
                     ],
                   ],

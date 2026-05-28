@@ -32,20 +32,22 @@ class LoggedOut extends AuthEvent {}
 
 class UserUpdated extends AuthEvent {
   final User user;
+  final String? token;
 
-  const UserUpdated({required this.user});
+  const UserUpdated({required this.user, this.token});
 
   @override
-  List<Object?> get props => [user];
+  List<Object?> get props => [user, token];
 }
 
 class IMLoginResult extends AuthEvent {
   final String userID;
   final bool success;
-  final String? imToken;
+  final String? userSig;
 
-  const IMLoginResult({required this.userID, required this.success, this.imToken});
+  const IMLoginResult(
+      {required this.userID, required this.success, this.userSig});
 
   @override
-  List<Object?> get props => [userID, success, imToken];
+  List<Object?> get props => [userID, success, userSig];
 }

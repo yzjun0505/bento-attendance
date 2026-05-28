@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/bento_colors.dart';
 import '../../core/bento_typography.dart';
 import '../../widgets/bento_widgets.dart';
-import '../../services/openim_service.dart' as im_service;
+import '../../services/tencent_im_service.dart' as im_service;
 import 'chat_screen.dart';
 
 class ConversationListScreen extends StatefulWidget {
@@ -14,7 +14,7 @@ class ConversationListScreen extends StatefulWidget {
 
 class _ConversationListScreenState extends State<ConversationListScreen> {
   int _currentTab = 0;
-  final _imService = im_service.OpenIMService();
+  final _imService = im_service.TencentIMService();
 
   List<dynamic> _conversations = [];
   List<dynamic> _friends = [];
@@ -47,7 +47,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
     });
 
     if (!_imService.isLoggedIn) {
-      print('IM 未登陆，请重新登陆');
+      debugPrint('IM 未登陆，请重新登陆');
       return;
     }
 
@@ -65,7 +65,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
         });
       }
     } catch (e) {
-      print('加载数据失败: $e');
+      debugPrint('加载数据失败: $e');
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -119,7 +119,7 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
 
   Widget _buildContent(BentoColors colors, ThemeData theme) {
     if (!_imService.isLoggedIn) {
-      return BentoEmptyState(
+      return const BentoEmptyState(
         icon: Icons.chat_bubble_outline,
         title: '未登录 IM',
         description: '请先登录以使用聊天功能',
@@ -211,11 +211,10 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
       dynamic conv, BentoColors colors, ThemeData theme) {
     final isGroup = conv.groupID != null && conv.groupID!.isNotEmpty;
     final name = conv.showName ?? (isGroup ? '群聊' : '用户');
-    final lastMsg = conv.latestMsg?.textElem?.content ?? '';
+    final lastMsg = _imService.getMessageDigest(conv.lastMessage);
     final unreadCount = conv.unreadCount ?? 0;
-    final time = conv.latestMsgSendTime != null
-        ? _formatTime(conv.latestMsgSendTime)
-        : '';
+    final timestamp = conv.lastMessage?.timestamp;
+    final time = timestamp != null ? _formatTime(timestamp * 1000) : '';
 
     return GestureDetector(
       onTap: () {
@@ -345,7 +344,10 @@ class _ConversationListScreenState extends State<ConversationListScreen> {
 
   Widget _buildContactItem(
       dynamic friend, BentoColors colors, ThemeData theme) {
-    final name = friend.nickname ?? friend.userID ?? '用户';
+    final name = friend.friendRemark ??
+        friend.userProfile?.nickName ??
+        friend.userID ??
+        '用户';
 
     return GestureDetector(
       onTap: () {

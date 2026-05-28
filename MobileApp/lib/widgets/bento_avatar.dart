@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/bento_colors.dart';
 
-
 /// BentoAvatar — 头像组件
 ///
 /// 支持：网络图片、本地资源、文字占位、图标占位

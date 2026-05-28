@@ -70,18 +70,24 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         lastCheckinIn: null,
         lastCheckinOut: null,
         totalCheckinsThisMonth: 0,
-        timelineItems: [],
+        timelineItems: const [],
       ));
     }
 
     try {
       // 并行获取所有数据，极大减少等待时间
-      final weatherFuture = WeatherService.getWeatherByLocation(latitude: 39.9042, longitude: 116.4074).catchError((_) => null);
-      final notifFuture = notificationRepository.getNotifications(page: 1, pageSize: 10).catchError((_) => <NotificationModel>[]);
-      
+      final weatherFuture = WeatherService.getWeatherByLocation(
+              latitude: 39.9042, longitude: 116.4074)
+          .catchError((_) => null);
+      final notifFuture = notificationRepository
+          .getNotifications(page: 1, pageSize: 10)
+          .catchError((_) => <NotificationModel>[]);
+
       final results = await Future.wait([
         checkinRepository.getTodayCheckins().catchError((_) => <Checkin>[]),
-        checkinRepository.getMyCheckins(page: 1, pageSize: 100).catchError((_) => <Checkin>[]),
+        checkinRepository
+            .getMyCheckins(page: 1, pageSize: 100)
+            .catchError((_) => <Checkin>[]),
         _fetchMyAttendanceGroup().catchError((_) => null),
         weatherFuture,
         notifFuture,
@@ -93,12 +99,18 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       final weatherInfo = results[3] as WeatherInfo?;
       final notifications = results[4] as List<NotificationModel>? ?? [];
 
-      final inCheckin = todayCheckins.where((c) => c.type == 'in' || c.type == 'clock_in').firstOrNull;
-      final outCheckin = todayCheckins.where((c) => c.type == 'out' || c.type == 'clock_out').firstOrNull;
+      final inCheckin = todayCheckins
+          .where((c) => c.type == 'in' || c.type == 'clock_in')
+          .firstOrNull;
+      final outCheckin = todayCheckins
+          .where((c) => c.type == 'out' || c.type == 'clock_out')
+          .firstOrNull;
 
       final now = DateTime.now();
-      final monthCheckins = allCheckins.where((c) =>
-        c.createdAt.year == now.year && c.createdAt.month == now.month).toList();
+      final monthCheckins = allCheckins
+          .where((c) =>
+              c.createdAt.year == now.year && c.createdAt.month == now.month)
+          .toList();
       final daySet = monthCheckins.map((c) => c.createdAt.day).toSet();
 
       final timelineItems = _buildTimelineItems(todayCheckins, notifications);
@@ -143,13 +155,15 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     final items = <TimelineItem>[];
 
     for (final c in checkins) {
-      final isIn = c.type == 'in';
+      final isIn = c.type == 'in' || c.type == 'clock_in';
       items.add(TimelineItem(
         time: DateFormat('HH:mm').format(c.createdAt),
         title: isIn ? '上班打卡' : '下班打卡',
         subtitle: c.address.isNotEmpty ? c.address : (c.projectName ?? '打卡成功'),
         icon: isIn ? Icons.login_rounded : Icons.logout_rounded,
         color: isIn ? const Color(0xFF3B82F6) : const Color(0xFF10B981),
+        sourceId: c.id,
+        sourceType: 'checkin',
       ));
     }
 
@@ -164,6 +178,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         color: n.type == 'approval'
             ? const Color(0xFFF59E0B)
             : const Color(0xFF8B5CF6),
+        sourceId: n.id,
+        sourceType: n.type == 'approval' ? 'approval' : 'notification',
       ));
     }
 

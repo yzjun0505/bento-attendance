@@ -6,7 +6,6 @@ import '../../api/dio_client.dart';
 import '../../repositories/checkin_repository.dart';
 import '../../repositories/project_repository.dart';
 
-
 class CheckinConfirmScreen extends StatefulWidget {
   final String photoPath;
   final Map<String, dynamic>? watermarkData;
@@ -39,11 +38,36 @@ class _CheckinConfirmScreenState extends State<CheckinConfirmScreen> {
 
   final List<Map<String, dynamic>> _checkinTypes = [
     {'value': 'clock_in', 'label': '上班打卡', 'icon': Icons.login, 'color': null},
-    {'value': 'clock_out', 'label': '下班打卡', 'icon': Icons.logout, 'color': null},
-    {'value': 'field_visit', 'label': '实地考察', 'icon': Icons.explore, 'color': null},
-    {'value': 'progress_report', 'label': '项目进度上报', 'icon': Icons.trending_up, 'color': null},
-    {'value': 'safety_check', 'label': '安全检查', 'icon': Icons.verified_user, 'color': null},
-    {'value': 'location_report', 'label': '位置上报', 'icon': Icons.location_on, 'color': null},
+    {
+      'value': 'clock_out',
+      'label': '下班打卡',
+      'icon': Icons.logout,
+      'color': null
+    },
+    {
+      'value': 'field_visit',
+      'label': '实地考察',
+      'icon': Icons.explore,
+      'color': null
+    },
+    {
+      'value': 'progress_report',
+      'label': '项目进度上报',
+      'icon': Icons.trending_up,
+      'color': null
+    },
+    {
+      'value': 'safety_check',
+      'label': '安全检查',
+      'icon': Icons.verified_user,
+      'color': null
+    },
+    {
+      'value': 'location_report',
+      'label': '位置上报',
+      'icon': Icons.location_on,
+      'color': null
+    },
   ];
 
   @override
@@ -201,8 +225,11 @@ class _CheckinConfirmScreenState extends State<CheckinConfirmScreen> {
               dropdownColor: colors.surface,
               style: TextStyle(color: colors.textPrimary),
               items: _projects.map((p) {
-                final id = p is Map<String, dynamic> ? p['id'] : (p as dynamic)?.id;
-                final name = p is Map<String, dynamic> ? p['name'] : (p as dynamic)?.name;
+                final id =
+                    p is Map<String, dynamic> ? p['id'] : (p as dynamic)?.id;
+                final name = p is Map<String, dynamic>
+                    ? p['name']
+                    : (p as dynamic)?.name;
                 return DropdownMenuItem<int>(
                   value: id as int?,
                   child: Text(name ?? ''),
@@ -241,10 +268,13 @@ class _CheckinConfirmScreenState extends State<CheckinConfirmScreen> {
           children: _checkinTypes.map((type) {
             final isSelected = _checkinType == type['value'];
             return GestureDetector(
-              onTap: () => setState(() => _checkinType = type['value'] as String),
+              onTap: () =>
+                  setState(() => _checkinType = type['value'] as String),
               child: Container(
                 decoration: BoxDecoration(
-                  color: isSelected ? colors.primary.withValues(alpha: 0.15) : colors.surface,
+                  color: isSelected
+                      ? colors.primary.withValues(alpha: 0.15)
+                      : colors.surface,
                   borderRadius: BorderRadius.circular(BentoRadius.sm),
                   border: Border.all(
                     color: isSelected ? colors.primary : colors.border,
@@ -263,9 +293,11 @@ class _CheckinConfirmScreenState extends State<CheckinConfirmScreen> {
                     Text(
                       type['label'] as String,
                       style: TextStyle(
-                        color: isSelected ? colors.primary : colors.textSecondary,
+                        color:
+                            isSelected ? colors.primary : colors.textSecondary,
                         fontSize: 12,
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.w400,
                       ),
                     ),
                   ],
@@ -329,15 +361,19 @@ class _CheckinConfirmScreenState extends State<CheckinConfirmScreen> {
         style: ElevatedButton.styleFrom(
           backgroundColor: colors.primary,
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(BentoRadius.md)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(BentoRadius.md)),
         ),
         child: _isSubmitting
             ? const SizedBox(
                 width: 24,
                 height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
+                child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
               )
-            : const Text('确认提交', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            : const Text('确认提交',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
       ),
     );
   }

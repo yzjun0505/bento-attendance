@@ -85,7 +85,8 @@ class BentoCard extends StatelessWidget {
     final bgColor = customBgColor ?? _getBgColor(colors, isDark);
     final borderColor = customBorderColor ?? _getBorderColor(colors);
     final shadow = customShadow ?? _getShadow(colors, isDark);
-    final shouldUseGlass = useGlassMorphism && isDark && _variant == _BentoCardVariant.elevated;
+    final shouldUseGlass =
+        useGlassMorphism && isDark && _variant == _BentoCardVariant.elevated;
 
     Widget card = Container(
       margin: margin,

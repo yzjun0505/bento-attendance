@@ -6,7 +6,7 @@ const jwt = require('jsonwebtoken');
 const { getPool } = require('../models/db');
 const config = require('../config');
 const { successResponse, errorResponse } = require('../utils/helpers');
-const openIMService = require('../services/openimService');
+const tencentIMService = require('../services/tencentImService');
 const { createSession, generateRefreshToken, generateAccessToken } = require('./sessionController');
 
 /**
@@ -50,48 +50,46 @@ async function login(req, res) {
     
     await createSession(user.id, refreshToken, deviceInfo, ipAddress, platform, deviceId);
 
-    // --- OpenIM 异步处理流程 ---
+    // --- 腾讯云 IM 异步处理流程 ---
     let imToken = null;
-    console.log(`主登录完成，开始异步处理 OpenIM [用户ID: ${user.id}]`);
+    console.log(`主登录完成，开始异步处理腾讯云 IM [用户ID: ${user.id}]`);
 
-    // 我们可以尝试在短时间内同步获取，如果快就带上，如果不快就让前端之后补偿
     const imPromise = (async () => {
       try {
-        const regResult = await openIMService.registerUser({
+        const regResult = await tencentIMService.registerUser({
           userID: user.id,
           nickname: user.name || user.username,
           faceURL: user.avatar || '',
+          role: user.role,
         });
 
         if (regResult.success) {
-          const tokenResult = await openIMService.getUserToken(user.id, 1);
+          const tokenResult = await tencentIMService.getUserToken(user.id, 604800);
           if (tokenResult.success && tokenResult.data) {
             return tokenResult.data.token;
           }
         }
       } catch (err) {
-        console.warn(`OpenIM 异步处理静默失败 [${user.id}]:`, err.message);
+        console.warn(`腾讯云 IM 异步处理静默失败 [${user.id}]:`, err.message);
       }
       return null;
     })();
 
-    // 设置一个较短的超时时间（例如 2s），如果 IM 响应快就直接返回，慢就让前端之后拿
     try {
       imToken = await Promise.race([
         imPromise,
         new Promise((resolve) => setTimeout(() => resolve(null), 2000))
       ]);
       if (imToken) {
-        console.log(`OpenIM Token 同步获取成功 [${user.id}]`);
+        console.log(`腾讯云 IM UserSig 同步获取成功 [${user.id}]`);
       } else {
-        console.log(`OpenIM Token 处理中或已超时，将通过异步补偿完成 [${user.id}]`);
+        console.log(`腾讯云 IM UserSig 处理中或已超时，将通过异步补偿完成 [${user.id}]`);
       }
     } catch (e) {
       imToken = null;
     }
 
-    const reqHost = req.get('host') || 'localhost:3000';
-    const imConfig = openIMService.getConfig(reqHost);
+    const imConfig = tencentIMService.getConfig(req.get('host'));
 
     const { password: _, ...userInfo } = user;
     res.json(successResponse({ 
@@ -208,17 +206,16 @@ async function getIMToken(req, res) {
     const userID = req.user.id;
     console.log(`收到 IM Token 补偿请求 [用户ID: ${userID}]`);
 
-    // 尝试获取用户 OpenIM 信息（确保已注册）
-    await openIMService.registerUser({
+    await tencentIMService.registerUser({
       userID: userID,
       nickname: req.user.name || req.user.username,
       faceURL: req.user.avatar || '',
+      role: req.user.role,
     });
 
-    const tokenResult = await openIMService.getUserToken(userID, 1);
+    const tokenResult = await tencentIMService.getUserToken(userID, 604800);
     if (tokenResult.success && tokenResult.data) {
-      const reqHost = req.get('host') || 'localhost:3000';
-      const imConfig = openIMService.getConfig(reqHost);
+      const imConfig = tencentIMService.getConfig(req.get('host'));
       
       return res.json(successResponse({
         imToken: tokenResult.data.token,

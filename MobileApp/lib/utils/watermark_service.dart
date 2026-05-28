@@ -133,7 +133,8 @@ class WatermarkService {
     return '';
   }
 
-  static String _getSlotDisplayText(WatermarkSlot slot, Map<String, String> data) {
+  static String _getSlotDisplayText(
+      WatermarkSlot slot, Map<String, String> data) {
     final value = _getSlotValue(slot, data);
     if (value.isEmpty) return '';
     if (slot.id == 'title' || slot.id == 'subtitle') {
@@ -190,44 +191,49 @@ class WatermarkService {
     final dateStr = DateFormat('yyyy-MM-dd').format(timestamp);
     final timeOnlyStr = DateFormat('HH:mm:ss').format(timestamp);
     final weekdayStr = _getWeekdayStr(timestamp);
+    final hasLocation = latitude.abs() > 0.000001 || longitude.abs() > 0.000001;
     final locStr = address ??
-        '${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}';
+        (hasLocation
+            ? '${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}'
+            : '定位未获取');
 
-    final data = watermarkData ?? <String, String>{
-      'timeFull': timeStr,
-      'timeDate': '$dateStr  $weekdayStr',
-      'timeOnly': timeOnlyStr,
-      'projectName': projectName,
-      'addressDetail': locStr,
-      'userName': userName,
-      'gpsLat': '纬度: ${latitude.toStringAsFixed(6)}',
-      'gpsLng': '经度: ${longitude.toStringAsFixed(6)}',
-      'weather': weather,
-      'temperature': (temperature != null && temperature != '--')
-          ? '温度: $temperature℃'
-          : '',
-      'humidity':
-          (humidity != null && humidity != '--') ? '湿度: $humidity%' : '',
-      'altitude': altitude != null ? '海拔: ${altitude.toStringAsFixed(1)}m' : '',
-      'antiFakeCode': '防伪码: $watermarkCode',
-      'homeowner': homeowner ?? '',
-      'contractorOrg': contractorOrg ?? '',
-      'teamLeader': teamLeader ?? '',
-      'manager': manager ?? '',
-      'workContent': workContent ?? customName,
-      'safetyStatus': safetyStatus ?? '正常',
-      'deviceNo': deviceNo ?? '',
-      'deviceStatus': deviceStatus ?? '正常',
-      'acceptanceResult': acceptanceResult ?? '合格',
-      'position': position ?? '',
-      'remark': remark ?? '',
-      'companyName': companyName ?? '',
-      'inspectionContent': customName,
-      'acceptanceContent': customName,
-    };
+    final data = watermarkData ??
+        <String, String>{
+          'timeFull': timeStr,
+          'timeDate': '$dateStr  $weekdayStr',
+          'timeOnly': timeOnlyStr,
+          'projectName': projectName,
+          'addressDetail': locStr,
+          'userName': userName,
+          'gpsLat': hasLocation ? '纬度: ${latitude.toStringAsFixed(6)}' : '',
+          'gpsLng': hasLocation ? '经度: ${longitude.toStringAsFixed(6)}' : '',
+          'weather': weather,
+          'temperature': (temperature != null && temperature != '--')
+              ? '温度: $temperature℃'
+              : '',
+          'humidity':
+              (humidity != null && humidity != '--') ? '湿度: $humidity%' : '',
+          'altitude':
+              altitude != null ? '海拔: ${altitude.toStringAsFixed(1)}m' : '',
+          'antiFakeCode': watermarkCode,
+          'homeowner': homeowner ?? '',
+          'contractorOrg': contractorOrg ?? '',
+          'teamLeader': teamLeader ?? '',
+          'manager': manager ?? '',
+          'workContent': workContent ?? customName,
+          'safetyStatus': safetyStatus ?? '正常',
+          'deviceNo': deviceNo ?? '',
+          'deviceStatus': deviceStatus ?? '正常',
+          'acceptanceResult': acceptanceResult ?? '合格',
+          'position': position ?? '',
+          'remark': remark ?? '',
+          'companyName': companyName ?? '',
+          'inspectionContent': customName,
+          'acceptanceContent': customName,
+        };
 
     if (!data.containsKey('antiFakeCode') || data['antiFakeCode']!.isEmpty) {
-      data['antiFakeCode'] = '防伪码: $watermarkCode';
+      data['antiFakeCode'] = watermarkCode;
     }
 
     final tmpl = template ?? _defaultTemplate();
@@ -260,12 +266,15 @@ class WatermarkService {
     return outputFile;
   }
 
-  static int legacyGetDisplayLines(WatermarkTemplate tmpl, Map<String, String> data) {
+  static int legacyGetDisplayLines(
+      WatermarkTemplate tmpl, Map<String, String> data) {
     int lines = 0;
-    if (tmpl.titleSlot != null && _getSlotValue(tmpl.titleSlot!, data).isNotEmpty) {
+    if (tmpl.titleSlot != null &&
+        _getSlotValue(tmpl.titleSlot!, data).isNotEmpty) {
       lines++;
     }
-    if (tmpl.subtitleSlot != null && _getSlotValue(tmpl.subtitleSlot!, data).isNotEmpty) {
+    if (tmpl.subtitleSlot != null &&
+        _getSlotValue(tmpl.subtitleSlot!, data).isNotEmpty) {
       lines++;
     }
     for (final slot in tmpl.contentSlots) {
@@ -403,7 +412,10 @@ class WatermarkService {
       final gradient = LinearGradient(
         begin: Alignment.bottomCenter,
         end: Alignment.topCenter,
-        colors: [tmpl.backgroundColor, tmpl.backgroundColor.withValues(alpha: 0.0)],
+        colors: [
+          tmpl.backgroundColor,
+          tmpl.backgroundColor.withValues(alpha: 0.0)
+        ],
       );
       bgPaint.shader =
           gradient.createShader(Rect.fromLTWH(x, y, cardWidth, cardHeight));
@@ -411,28 +423,24 @@ class WatermarkService {
     } else if (skeletonPreset == 'glass') {
       final bgPaint = Paint()..color = Colors.white.withValues(alpha: 0.15);
       canvas.drawRRect(
-          RRect.fromLTRBR(
-              x, y, x + cardWidth, y + cardHeight, borderRadius),
+          RRect.fromLTRBR(x, y, x + cardWidth, y + cardHeight, borderRadius),
           bgPaint);
       final borderPaint = Paint()
         ..color = Colors.white.withValues(alpha: 0.2)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1 * scale;
       canvas.drawRRect(
-          RRect.fromLTRBR(
-              x, y, x + cardWidth, y + cardHeight, borderRadius),
+          RRect.fromLTRBR(x, y, x + cardWidth, y + cardHeight, borderRadius),
           borderPaint);
     } else if (skeletonPreset == 'compact') {
       final bgPaint = Paint()..color = Colors.black.withValues(alpha: 0.6);
       canvas.drawRRect(
-          RRect.fromLTRBR(
-              x, y, x + cardWidth, y + cardHeight, borderRadius),
+          RRect.fromLTRBR(x, y, x + cardWidth, y + cardHeight, borderRadius),
           bgPaint);
     } else {
       final bgPaint = Paint()..color = tmpl.backgroundColor;
       canvas.drawRRect(
-          RRect.fromLTRBR(
-              x, y, x + cardWidth, y + cardHeight, borderRadius),
+          RRect.fromLTRBR(x, y, x + cardWidth, y + cardHeight, borderRadius),
           bgPaint);
     }
 
@@ -512,8 +520,10 @@ class WatermarkService {
 
       for (int r = -rows ~/ 2; r < rows ~/ 2; r++) {
         for (int c = -cols ~/ 2; c < cols ~/ 2; c++) {
-          tp.paint(canvas,
-              Offset(c * spacingX - tp.width / 2, r * spacingY - tp.height / 2));
+          tp.paint(
+              canvas,
+              Offset(
+                  c * spacingX - tp.width / 2, r * spacingY - tp.height / 2));
         }
       }
       canvas.restore();
@@ -666,8 +676,7 @@ class WatermarkService {
     if (skeletonPreset == 'glass') {
       final bgPaint = Paint()..color = Colors.white.withValues(alpha: 0.15);
       canvas.drawRRect(
-          RRect.fromLTRBR(x, y, x + cardW, y + cardH, borderRadius),
-          bgPaint);
+          RRect.fromLTRBR(x, y, x + cardW, y + cardH, borderRadius), bgPaint);
       final borderPaint = Paint()
         ..color = Colors.white.withValues(alpha: 0.2)
         ..style = PaintingStyle.stroke

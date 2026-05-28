@@ -24,6 +24,7 @@
           <el-option label="管理员" value="admin" />
           <el-option label="项目经理" value="manager" />
           <el-option label="工人" value="worker" />
+          <el-option label="甲方用户" value="client" />
         </el-select>
         <el-select v-model="filters.status" placeholder="状态" clearable style="width: 130px" @change="loadData">
           <el-option label="在职" :value="1" />
@@ -82,6 +83,8 @@
                 <el-button link :icon="MoreFilled" style="margin-left: 8px; color: var(--text-secondary);"></el-button>
                 <template #dropdown>
                   <el-dropdown-menu>
+                    <el-dropdown-item v-if="isAdmin && row.role === 'manager'" command="authProjects">项目经理授权</el-dropdown-item>
+                    <el-dropdown-item v-if="isAdmin && row.role === 'client'" command="authClientProjects">甲方项目授权</el-dropdown-item>
                     <el-dropdown-item command="resetPwd">重置密码</el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
@@ -128,10 +131,16 @@
             <el-option label="管理员" value="admin" />
             <el-option label="项目经理" value="manager" />
             <el-option label="工人" value="worker" />
+            <el-option label="甲方用户" value="client" />
           </el-select>
         </el-form-item>
         <el-form-item label="手机号" prop="phone">
-          <el-input v-model="dialogForm.phone" placeholder="请输入手机号" />
+          <el-input
+            v-model.trim="dialogForm.phone"
+            placeholder="请输入11位手机号"
+            maxlength="11"
+            show-word-limit
+          />
         </el-form-item>
         <el-form-item label="所属项目">
           <el-select v-model="dialogForm.project_id" placeholder="请选择项目" clearable style="width: 100%">
@@ -147,25 +156,67 @@
         <el-button type="primary" :loading="saving" @click="handleSave">保存</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="authDialogVisible"
+      :title="authDialogTitle"
+      width="520px"
+      :close-on-click-modal="false"
+    >
+      <el-form label-width="90px">
+        <el-form-item :label="authUserLabel">
+          <el-input :model-value="authorizingUser?.name || authorizingUser?.username || ''" disabled />
+        </el-form-item>
+        <el-form-item label="授权项目" required>
+          <el-select
+            v-model="selectedProjectIds"
+            multiple
+            filterable
+            placeholder="请选择项目"
+            style="width: 100%"
+            :loading="authLoading"
+          >
+            <el-option v-for="p in projectList" :key="p.id" :label="p.name" :value="p.id" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="authDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="authSaving" @click="handleSaveAuth">保存授权</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { getUsers, createUser, updateUser, deleteUser, resetPassword } from '@/api/users'
 import { getAllProjects } from '@/api/projects'
+import { getProjectManagers, bindProjectManager, unbindProjectManager } from '@/api/projectManagers'
+import { getProjectClients, bindProjectClient, unbindProjectClient } from '@/api/projectClients'
+import { useUserStore } from '@/store/user'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search, Edit, Delete, MoreFilled } from '@element-plus/icons-vue'
 
-const roleMap = { admin: '管理员', manager: '项目经理', worker: '工人' }
+const roleMap = { admin: '管理员', manager: '项目经理', worker: '工人', client: '甲方用户' }
 
 const loading = ref(false)
 const saving = ref(false)
+const authLoading = ref(false)
+const authSaving = ref(false)
 const tableData = ref([])
 const projectList = ref([])
 const dialogVisible = ref(false)
+const authDialogVisible = ref(false)
 const editingUser = ref(null)
+const authorizingUser = ref(null)
 const dialogFormRef = ref(null)
+const authRows = ref([])
+const selectedProjectIds = ref([])
+const userStore = useUserStore()
+const isAdmin = computed(() => userStore.userInfo?.role === 'admin')
+const authDialogTitle = computed(() => authorizingUser.value?.role === 'client' ? '甲方项目授权' : '项目经理授权')
+const authUserLabel = computed(() => authorizingUser.value?.role === 'client' ? '甲方用户' : '项目经理')
 
 const filters = reactive({ keyword: '', role: '', status: '', project_id: '' })
 const pagination = reactive({ page: 1, pageSize: 20, total: 0 })
@@ -174,11 +225,20 @@ const dialogForm = reactive({
   username: '', password: '', name: '', role: 'worker', phone: '', project_id: null, status: 1
 })
 
+const validatePhone = (_rule, value, callback) => {
+  if (!/^\d{11}$/.test(String(value || '').trim())) {
+    callback(new Error('请输入11位手机号'))
+    return
+  }
+  callback()
+}
+
 const dialogRules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
   name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
-  role: [{ required: true, message: '请选择角色', trigger: 'change' }]
+  role: [{ required: true, message: '请选择角色', trigger: 'change' }],
+  phone: [{ required: true, validator: validatePhone, trigger: 'blur' }]
 }
 
 onMounted(() => {
@@ -270,6 +330,69 @@ async function handleResetPwd(row) {
 function handleCommand(command, row) {
   if (command === 'resetPwd') {
     handleResetPwd(row)
+  } else if (command === 'authProjects' || command === 'authClientProjects') {
+    openAuthDialog(row)
+  }
+}
+
+async function openAuthDialog(user) {
+  if (!['manager', 'client'].includes(user.role)) {
+    ElMessage.warning('只有项目经理或甲方用户可以进行项目授权')
+    return
+  }
+  authorizingUser.value = user
+  authDialogVisible.value = true
+  authLoading.value = true
+  try {
+    if (projectList.value.length === 0) {
+      await loadProjects()
+    }
+    const res = user.role === 'client'
+      ? await getProjectClients({ client_id: user.id })
+      : await getProjectManagers({ manager_id: user.id })
+    authRows.value = res.data || []
+    selectedProjectIds.value = authRows.value.map((item) => item.project_id)
+  } catch (e) {
+    ElMessage.error(e.response?.data?.message || '加载授权信息失败')
+  } finally {
+    authLoading.value = false
+  }
+}
+
+async function handleSaveAuth() {
+  if (!authorizingUser.value) return
+
+  const currentIds = new Set(authRows.value.map((item) => item.project_id))
+  const nextIds = new Set(selectedProjectIds.value)
+  const additions = selectedProjectIds.value.filter((id) => !currentIds.has(id))
+  const removals = authRows.value.filter((item) => !nextIds.has(item.project_id))
+
+  authSaving.value = true
+  try {
+    if (authorizingUser.value.role === 'client') {
+      await Promise.all([
+        ...additions.map((projectId) => bindProjectClient({
+          client_id: authorizingUser.value.id,
+          project_id: projectId
+        })),
+        ...removals.map((item) => unbindProjectClient(item.id))
+      ])
+    } else {
+      await Promise.all([
+        ...additions.map((projectId) => bindProjectManager({
+          manager_id: authorizingUser.value.id,
+          project_id: projectId
+        })),
+        ...removals.map((item) => unbindProjectManager(item.id))
+      ])
+    }
+    ElMessage.success('项目授权已更新')
+    authDialogVisible.value = false
+    await loadData()
+  } catch (e) {
+    ElMessage.error(e.response?.data?.message || e.message || '保存授权失败')
+  } finally {
+    authSaving.value = false
   }
 }
 </script>

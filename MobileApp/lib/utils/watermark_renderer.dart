@@ -42,14 +42,16 @@ class WatermarkLayoutSpec {
         : double.tryParse(reference?.toString() ?? '') ?? defaultReferenceWidth;
 
     return WatermarkLayoutSpec(
-      referenceWidth: referenceWidth <= 0 ? defaultReferenceWidth : referenceWidth,
+      referenceWidth:
+          referenceWidth <= 0 ? defaultReferenceWidth : referenceWidth,
       x: readDouble('x', 0.08).clamp(0.0, 1.0),
       y: readDouble('y', 0.68).clamp(0.0, 1.0),
       width: readDouble('width', 0.72).clamp(0.2, 1.0),
       padding: readDouble('padding', 16).clamp(0.0, 80.0),
       lineHeight: readDouble('lineHeight', 1.6).clamp(1.0, 2.4),
-      radius: readDouble('radius', template.skeletonPreset == 'compact' ? 8 : 12)
-          .clamp(0.0, 48.0),
+      radius:
+          readDouble('radius', template.skeletonPreset == 'compact' ? 8 : 12)
+              .clamp(0.0, 48.0),
     );
   }
 }
@@ -119,7 +121,8 @@ class WatermarkPainter extends CustomPainter {
 }
 
 class WatermarkRenderer {
-  static String getFieldValue(WatermarkFieldType type, Map<String, String> data) {
+  static String getFieldValue(
+      WatermarkFieldType type, Map<String, String> data) {
     switch (type) {
       case WatermarkFieldType.timeFull:
         return data['timeFull'] ?? '';
@@ -215,7 +218,8 @@ class WatermarkRenderer {
     return '';
   }
 
-  static String getSlotDisplayText(WatermarkSlot slot, Map<String, String> data) {
+  static String getSlotDisplayText(
+      WatermarkSlot slot, Map<String, String> data) {
     final value = getSlotValue(slot, data);
     if (value.isEmpty) return '';
     if (slot.id == 'title' || slot.id == 'subtitle') return value;
@@ -228,9 +232,13 @@ class WatermarkRenderer {
   ) {
     final lines = <WatermarkRenderLine>[];
 
-    void addSlot(WatermarkSlot slot, {bool isTitle = false, bool isSubtitle = false}) {
+    void addSlot(WatermarkSlot slot,
+        {bool isTitle = false, bool isSubtitle = false}) {
       final fieldType = slot.fieldType;
-      if (fieldType != null && !(template.fieldEnabled[fieldType] ?? true)) return;
+      if (_isFixedSystemField(fieldType)) return;
+      if (fieldType != null && !(template.fieldEnabled[fieldType] ?? true)) {
+        return;
+      }
       final text = isTitle || isSubtitle
           ? getSlotValue(slot, data)
           : getSlotDisplayText(slot, data);
@@ -260,6 +268,7 @@ class WatermarkRenderer {
 
     if (lines.isEmpty) {
       for (final field in template.enabledFields) {
+        if (_isFixedSystemField(field)) continue;
         final value = getFieldValue(field, data);
         if (value.isNotEmpty) {
           lines.add(WatermarkRenderLine(text: value));
@@ -286,15 +295,25 @@ class WatermarkRenderer {
     }
 
     final lines = buildLines(template, data);
-    if (lines.isEmpty) return null;
+    WatermarkRenderResult? result;
+
+    // Pre-compute the right-side fixed marks rect for bottomLeft avoidance.
+    final systemMarksRect = template.defaultStyle == WatermarkStyle.bottomLeft
+        ? _calculateFixedSystemMarksRect(size, data, scale)
+        : Rect.zero;
 
     if (template.defaultStyle == WatermarkStyle.qrCode) {
-      return _paintQr(canvas, size, template, data, lines, normalizedOffset, scale,
-          rotationTurns, drawSelection);
+      if (lines.isNotEmpty) {
+        result = _paintQr(canvas, size, template, data, lines, normalizedOffset,
+            scale, rotationTurns, drawSelection);
+      }
+    } else if (lines.isNotEmpty) {
+      result = _paintCard(canvas, size, template, lines, normalizedOffset, scale,
+          rotationTurns, drawSelection, systemMarksRect: systemMarksRect);
     }
 
-    return _paintCard(canvas, size, template, lines, normalizedOffset, scale,
-        rotationTurns, drawSelection);
+    _paintFixedSystemMarks(canvas, size, data, scale);
+    return result;
   }
 
   static WatermarkRenderResult _paintCard(
@@ -305,38 +324,43 @@ class WatermarkRenderer {
     Offset normalizedOffset,
     double userScale,
     int rotationTurns,
-    bool drawSelection,
-  ) {
+    bool drawSelection, {
+    Rect systemMarksRect = Rect.zero,
+  }) {
     final layout = WatermarkLayoutSpec.fromTemplate(template);
     final renderScale = size.width / layout.referenceWidth * userScale;
     final padding = layout.padding * renderScale;
-    final cardWidth = template.defaultStyle == WatermarkStyle.bottomBar
+    double cardWidth = template.defaultStyle == WatermarkStyle.bottomBar
         ? size.width
         : size.width * layout.width * userScale;
-    final maxTextWidth = (cardWidth - padding * 2).clamp(1.0, double.infinity);
+    double maxTextWidth = (cardWidth - padding * 2).clamp(1.0, double.infinity);
 
     final painters = <TextPainter>[];
     double cardHeight = padding * 2;
     for (final line in lines) {
-      final fontSize = _lineFontSize(template, line) * renderScale;
-      final painter = _createTextPainter(
+      final baseFontSize = _lineFontSize(template, line) * renderScale;
+      final baseStyle = TextStyle(
+        color: line.color ?? template.textColor,
+        fontSize: baseFontSize,
+        fontWeight: line.isTitle ? FontWeight.bold : FontWeight.w500,
+        shadows: [
+          Shadow(
+            color: Colors.black.withValues(alpha: 0.5),
+            blurRadius: 2 * renderScale,
+          ),
+        ],
+      );
+      final painter = _createAutoScaledTextPainter(
         line.text,
-        TextStyle(
-          color: line.color ?? template.textColor,
-          fontSize: fontSize,
-          fontWeight: line.isTitle ? FontWeight.bold : FontWeight.w500,
-          shadows: [
-            Shadow(
-              color: Colors.black.withValues(alpha: 0.5),
-              blurRadius: 2 * renderScale,
-            ),
-          ],
-        ),
+        baseStyle,
         maxTextWidth,
         maxLines: 2,
       );
       painters.add(painter);
-      cardHeight += painter.height + fontSize * (layout.lineHeight - 1).clamp(0.0, 1.4);
+      final actualFontSize =
+          painter.text?.style?.fontSize ?? baseFontSize;
+      cardHeight +=
+          painter.height + actualFontSize * (layout.lineHeight - 1).clamp(0.0, 1.4);
     }
 
     double x = template.defaultStyle == WatermarkStyle.bottomBar
@@ -348,14 +372,66 @@ class WatermarkRenderer {
     x = x.clamp(0.0, (size.width - cardWidth).clamp(0.0, double.infinity));
     y = y.clamp(0.0, (size.height - cardHeight).clamp(0.0, double.infinity));
 
+    // bottomLeft 样式：检查与右下固定标记的垂直重叠，动态收窄卡片宽度
+    if (template.defaultStyle == WatermarkStyle.bottomLeft &&
+        systemMarksRect != Rect.zero) {
+      final cardRect = Rect.fromLTWH(x, y, cardWidth, cardHeight);
+      if (cardRect.bottom > systemMarksRect.top &&
+          cardRect.top < systemMarksRect.bottom) {
+        final safeGap = 10 * renderScale;
+        final maxRight = systemMarksRect.left - safeGap;
+        final narrowedWidth =
+            (maxRight - x).clamp(60 * renderScale, cardWidth);
+        if (narrowedWidth < cardWidth - 0.5) {
+          cardWidth = narrowedWidth;
+          // 以收窄后的宽度重新布局文本、重新计算卡片高度
+          maxTextWidth = (cardWidth - padding * 2).clamp(1.0, double.infinity);
+          painters.clear();
+          cardHeight = padding * 2;
+          for (final line in lines) {
+            final baseFontSize = _lineFontSize(template, line) * renderScale;
+            final baseStyle = TextStyle(
+              color: line.color ?? template.textColor,
+              fontSize: baseFontSize,
+              fontWeight: line.isTitle ? FontWeight.bold : FontWeight.w500,
+              shadows: [
+                Shadow(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  blurRadius: 2 * renderScale,
+                ),
+              ],
+            );
+            final painter = _createAutoScaledTextPainter(
+              line.text,
+              baseStyle,
+              maxTextWidth,
+              maxLines: 2,
+            );
+            painters.add(painter);
+            final actualFontSize =
+                painter.text?.style?.fontSize ?? baseFontSize;
+            cardHeight += painter.height +
+                actualFontSize * (layout.lineHeight - 1).clamp(0.0, 1.4);
+          }
+          // 卡片高度变化后重新计算 y 位置
+          y = size.height * normalizedOffset.dy;
+          y = y.clamp(
+              0.0, (size.height - cardHeight).clamp(0.0, double.infinity));
+        }
+      }
+    }
+
     final rect = Rect.fromLTWH(x, y, cardWidth, cardHeight);
     _withRotation(canvas, rect, rotationTurns, () {
-      _paintSurface(canvas, rect, template, layout.radius * renderScale, renderScale);
+      _paintSurface(
+          canvas, rect, template, layout.radius * renderScale, renderScale);
       double curY = rect.top + padding;
       for (final painter in painters) {
         painter.paint(canvas, Offset(rect.left + padding, curY));
-        final fontSize = painter.text?.style?.fontSize ?? template.fontSize * renderScale;
-        curY += painter.height + fontSize * (layout.lineHeight - 1).clamp(0.0, 1.4);
+        final fontSize =
+            painter.text?.style?.fontSize ?? template.fontSize * renderScale;
+        curY +=
+            painter.height + fontSize * (layout.lineHeight - 1).clamp(0.0, 1.4);
       }
       if (drawSelection) {
         _paintSelection(canvas, rect, renderScale);
@@ -389,18 +465,22 @@ class WatermarkRenderer {
     final rect = Rect.fromLTWH(x, y, cardWidth, cardHeight);
 
     _withRotation(canvas, rect, rotationTurns, () {
-      _paintSurface(canvas, rect, template, layout.radius * renderScale, renderScale);
-      final qrRect = Rect.fromLTWH(rect.left + padding, rect.top + padding, qrSize, qrSize);
+      _paintSurface(
+          canvas, rect, template, layout.radius * renderScale, renderScale);
+      final qrRect = Rect.fromLTWH(
+          rect.left + padding, rect.top + padding, qrSize, qrSize);
       canvas.drawRect(qrRect, Paint()..color = Colors.white);
       _paintFakeQr(canvas, qrRect, data['antiFakeCode'] ?? '');
 
       final textLeft = qrRect.right + 10 * renderScale;
-      final maxTextWidth = (rect.right - padding - textLeft).clamp(1.0, double.infinity);
+      final maxTextWidth =
+          (rect.right - padding - textLeft).clamp(1.0, double.infinity);
       double curY = rect.top + padding;
       for (final line in lines.take(4)) {
         final painter = _createTextPainter(
           line.text,
-          TextStyle(color: line.color ?? Colors.white, fontSize: 11 * renderScale),
+          TextStyle(
+              color: line.color ?? Colors.white, fontSize: 11 * renderScale),
           maxTextWidth,
           maxLines: 2,
         );
@@ -420,9 +500,11 @@ class WatermarkRenderer {
     Map<String, String> data,
     double userScale,
   ) {
-    final text = '${data['companyName'] ?? ''} ${data['projectName'] ?? ''}'.trim();
+    final text =
+        '${data['companyName'] ?? ''} ${data['projectName'] ?? ''}'.trim();
     if (text.isEmpty) return;
-    final renderScale = size.width / WatermarkLayoutSpec.defaultReferenceWidth * userScale;
+    final renderScale =
+        size.width / WatermarkLayoutSpec.defaultReferenceWidth * userScale;
     final painter = _createTextPainter(
       text,
       TextStyle(
@@ -438,6 +520,124 @@ class WatermarkRenderer {
     canvas.rotate(-15 * 3.14159 / 180);
     painter.paint(canvas, Offset(-painter.width / 2, -painter.height / 2));
     canvas.restore();
+  }
+
+  static bool _isFixedSystemField(WatermarkFieldType? field) {
+    return field == WatermarkFieldType.antiFakeCode ||
+        field == WatermarkFieldType.timeFull ||
+        field == WatermarkFieldType.timeDate ||
+        field == WatermarkFieldType.timeOnly;
+  }
+
+  /// Calculates the bounding [Rect] of the bottom-right fixed system marks
+  /// (anti-fake code + time), without painting anything.
+  static Rect _calculateFixedSystemMarksRect(
+    Size size,
+    Map<String, String> data,
+    double userScale,
+  ) {
+    final timeText = _formatFixedTime(data);
+    final codeText = _formatFixedCode(data['antiFakeCode'] ?? '');
+    if (timeText.isEmpty && codeText.isEmpty) return Rect.zero;
+
+    final renderScale =
+        size.width / WatermarkLayoutSpec.defaultReferenceWidth * userScale;
+    final margin = 18 * renderScale;
+    final gap = 4 * renderScale;
+    final maxWidth = (size.width * 0.72).clamp(1.0, double.infinity);
+
+    double totalHeight = 0;
+    double maxTextWidth = 0;
+
+    void measureLine(String text, double fontSize) {
+      if (text.isEmpty) return;
+      final painter = _createTextPainter(
+        text,
+        TextStyle(color: Colors.white, fontSize: fontSize),
+        maxWidth,
+        maxLines: 1,
+      );
+      totalHeight += painter.height;
+      if (painter.width > maxTextWidth) maxTextWidth = painter.width;
+    }
+
+    measureLine(codeText, 13 * renderScale);
+    if (codeText.isNotEmpty && timeText.isNotEmpty) totalHeight += gap;
+    measureLine(timeText, 18 * renderScale);
+
+    if (totalHeight == 0) return Rect.zero;
+
+    final left = (size.width - margin - maxTextWidth).clamp(0.0, size.width);
+    final top = size.height - margin - totalHeight;
+    final right = size.width - margin;
+    final bottom = size.height - margin;
+    return Rect.fromLTRB(left, top, right, bottom);
+  }
+
+  static void _paintFixedSystemMarks(
+    Canvas canvas,
+    Size size,
+    Map<String, String> data,
+    double userScale,
+  ) {
+    final timeText = _formatFixedTime(data);
+    final codeText = _formatFixedCode(data['antiFakeCode'] ?? '');
+    if (timeText.isEmpty && codeText.isEmpty) return;
+
+    final renderScale =
+        size.width / WatermarkLayoutSpec.defaultReferenceWidth * userScale;
+    final margin = 18 * renderScale;
+    final gap = 4 * renderScale;
+    final maxWidth = (size.width * 0.72).clamp(1.0, double.infinity);
+    final lines = <TextPainter>[];
+
+    void addLine(String text, double fontSize) {
+      if (text.isEmpty) return;
+      lines.add(_createTextPainter(
+        text,
+        TextStyle(
+          color: Colors.white.withValues(alpha: 0.95),
+          fontSize: fontSize,
+          fontWeight: FontWeight.w500,
+          shadows: [
+            Shadow(
+              color: Colors.black.withValues(alpha: 0.65),
+              blurRadius: 4 * renderScale,
+              offset: Offset(0, 1 * renderScale),
+            ),
+          ],
+        ),
+        maxWidth,
+        maxLines: 1,
+      ));
+    }
+
+    addLine(codeText, 13 * renderScale);
+    addLine(timeText, 18 * renderScale);
+    if (lines.isEmpty) return;
+
+    final totalHeight =
+        lines.fold<double>(0, (sum, painter) => sum + painter.height) +
+            gap * (lines.length - 1);
+    double y = size.height - margin - totalHeight;
+    for (final painter in lines) {
+      painter.paint(canvas, Offset(size.width - margin - painter.width, y));
+      y += painter.height + gap;
+    }
+  }
+
+  static String _formatFixedTime(Map<String, String> data) {
+    final value = (data['timeFull'] ?? data['timeDate'] ?? '').trim();
+    if (value.isEmpty) return '';
+    final normalized = value.replaceAll('-', '/');
+    return normalized.length > 16 ? normalized.substring(0, 16) : normalized;
+  }
+
+  static String _formatFixedCode(String rawCode) {
+    var code = rawCode.trim();
+    if (code.isEmpty) return '';
+    code = code.replaceFirst(RegExp(r'^防伪码[:：]\s*'), '').trim();
+    return '防伪码: $code';
   }
 
   static void _paintSurface(
@@ -463,14 +663,10 @@ class WatermarkRenderer {
     }
 
     final rrect = RRect.fromRectAndRadius(rect, Radius.circular(radius));
-    final bgColor = template.skeletonPreset == 'glass'
-        ? Colors.white.withValues(alpha: 0.15)
-        : template.skeletonPreset == 'compact'
-            ? Colors.black.withValues(alpha: 0.6)
-            : template.backgroundColor;
-    canvas.drawRRect(rrect, Paint()..color = bgColor);
-
-    if (template.skeletonPreset == 'glass') {
+    final preset = template.skeletonPreset;
+    if (preset == 'glass') {
+      // White frosted glass
+      canvas.drawRRect(rrect, Paint()..color = Colors.white.withValues(alpha: 0.15));
       canvas.drawRRect(
         rrect,
         Paint()
@@ -478,6 +674,22 @@ class WatermarkRenderer {
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1 * scale,
       );
+    } else if (preset == 'compact') {
+      // Semi-transparent black
+      canvas.drawRRect(rrect, Paint()..color = Colors.black.withValues(alpha: 0.6));
+    } else if (preset == 'default') {
+      // Transparent dark micro-frosted-glass
+      canvas.drawRRect(rrect, Paint()..color = Colors.black.withValues(alpha: 0.2));
+      canvas.drawRRect(
+        rrect,
+        Paint()
+          ..color = Colors.white.withValues(alpha: 0.12)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1 * scale,
+      );
+    } else {
+      // Custom skeletonPreset — fall back to template backgroundColor
+      canvas.drawRRect(rrect, Paint()..color = template.backgroundColor);
     }
   }
 
@@ -495,7 +707,36 @@ class WatermarkRenderer {
     )..layout(maxWidth: maxWidth);
   }
 
-  static void _withRotation(Canvas canvas, Rect rect, int rotationTurns, VoidCallback draw) {
+  /// Creates a [TextPainter] that auto-scales font size down so the text
+  /// fits within [maxLines] at [maxWidth]. Starts at the given [baseStyle]
+  /// font size and steps down by 0.5 until it fits or reaches [minFontSize].
+  static TextPainter _createAutoScaledTextPainter(
+    String text,
+    TextStyle baseStyle,
+    double maxWidth, {
+    int maxLines = 2,
+    double minFontSize = 9.0,
+  }) {
+    final initialFontSize = baseStyle.fontSize ?? 14.0;
+    double currentSize = initialFontSize;
+    TextPainter? lastPainter;
+
+    while (currentSize >= minFontSize - 0.01) {
+      final style = baseStyle.copyWith(fontSize: currentSize);
+      final painter = _createTextPainter(text, style, maxWidth, maxLines: maxLines);
+      lastPainter = painter;
+      if (!painter.didExceedMaxLines) {
+        return painter;
+      }
+      currentSize -= 0.5;
+    }
+
+    // Return the last attempt (at minFontSize or just above)
+    return lastPainter!;
+  }
+
+  static void _withRotation(
+      Canvas canvas, Rect rect, int rotationTurns, VoidCallback draw) {
     canvas.save();
     if (rotationTurns != 0) {
       final center = rect.center;
@@ -509,7 +750,8 @@ class WatermarkRenderer {
 
   static void _paintSelection(Canvas canvas, Rect rect, double scale) {
     canvas.drawRRect(
-      RRect.fromRectAndRadius(rect.inflate(4 * scale), Radius.circular(14 * scale)),
+      RRect.fromRectAndRadius(
+          rect.inflate(4 * scale), Radius.circular(14 * scale)),
       Paint()
         ..color = Colors.white.withValues(alpha: 0.75)
         ..style = PaintingStyle.stroke
@@ -538,7 +780,8 @@ class WatermarkRenderer {
     }
   }
 
-  static double _lineFontSize(WatermarkTemplate template, WatermarkRenderLine line) {
+  static double _lineFontSize(
+      WatermarkTemplate template, WatermarkRenderLine line) {
     if (line.fontSize != null && line.fontSize! > 0) return line.fontSize!;
     if (line.isTitle) return template.fontSize * 1.3;
     if (line.isSubtitle) return template.fontSize * 0.95;
@@ -551,9 +794,8 @@ class WatermarkRenderer {
     if (text.isEmpty) return null;
     if (text.startsWith('#')) {
       final hex = text.substring(1);
-      final normalized = hex.length == 3
-          ? hex.split('').map((c) => '$c$c').join()
-          : hex;
+      final normalized =
+          hex.length == 3 ? hex.split('').map((c) => '$c$c').join() : hex;
       if (normalized.length == 6) {
         final color = int.tryParse('FF$normalized', radix: 16);
         if (color != null) return Color(color);

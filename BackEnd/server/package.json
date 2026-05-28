@@ -1,7 +1,7 @@
 {
   "name": "checkin-server",
   "version": "1.0.0",
-  "description": "多端协同打卡人员实时移动管理系统 - 后端服务",
+  "description": "境图项目协同管理平台 - 后端服务",
   "main": "app.js",
   "scripts": {
     "start": "node app.js",

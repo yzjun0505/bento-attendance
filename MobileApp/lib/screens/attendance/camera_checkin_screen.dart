@@ -16,7 +16,7 @@ import '../../core/bento_typography.dart';
 import '../../models/project_model.dart';
 import '../../repositories/checkin_repository.dart';
 import '../../utils/amap_geo_service.dart';
-import '../../utils/coord_utils.dart';
+import '../../utils/app_location_service.dart';
 import '../../utils/weather_service.dart';
 import '../../utils/watermark_service.dart';
 import '../../utils/watermark_renderer.dart';
@@ -41,7 +41,8 @@ class WatermarkPreviewBuilder {
     if (slot.binding != null && slot.binding!.isNotEmpty) {
       final fieldType = WatermarkTemplate.bindingToFieldType(slot.binding);
       if (fieldType != null) {
-        final value = _CameraCheckinScreenState._getFieldValueFromData(fieldType, data);
+        final value =
+            _CameraCheckinScreenState._getFieldValueFromData(fieldType, data);
         if (value.isNotEmpty) return value;
       }
     }
@@ -52,10 +53,9 @@ class WatermarkPreviewBuilder {
     // 3) 最后通过 label 匹配 fieldType 回退到 data
     if (slot.label.isNotEmpty) {
       final fieldType = WatermarkTemplate.labelToFieldType(slot.label);
-      if (fieldType != null) {
-        final value = _CameraCheckinScreenState._getFieldValueFromData(fieldType, data);
-        if (value.isNotEmpty) return value;
-      }
+      final value =
+          _CameraCheckinScreenState._getFieldValueFromData(fieldType, data);
+      if (value.isNotEmpty) return value;
     }
     return '';
   }
@@ -132,16 +132,18 @@ class WatermarkPreviewBuilder {
     }
   }
 
-  Widget _buildStyledPreview(WatermarkStyle style, List<WatermarkPreviewLine> lines) {
+  Widget _buildStyledPreview(
+      WatermarkStyle style, List<WatermarkPreviewLine> lines) {
     final baseFontSize = template.fontSize;
     final textColor = template.textColor;
     final bgColor = template.backgroundColor;
-    final padding = 16.0;
-    final cardWidth = (style == WatermarkStyle.bottomBar) ? double.infinity : 280.0;
+    const padding = 16.0;
+    final cardWidth =
+        (style == WatermarkStyle.bottomBar) ? double.infinity : 280.0;
 
     Widget content = Container(
       width: cardWidth,
-      padding: EdgeInsets.all(padding),
+      padding: const EdgeInsets.all(padding),
       decoration: _buildBoxDecoration(style, bgColor, padding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -150,7 +152,7 @@ class WatermarkPreviewBuilder {
           final fontSize = line.isTitle ? baseFontSize * 1.3 : baseFontSize;
           final fontWeight = line.isTitle ? FontWeight.bold : FontWeight.w500;
           return Padding(
-            padding: EdgeInsets.only(bottom: 4),
+            padding: const EdgeInsets.only(bottom: 4),
             child: Text(
               line.text,
               style: TextStyle(
@@ -188,7 +190,8 @@ class WatermarkPreviewBuilder {
     );
   }
 
-  BoxDecoration _buildBoxDecoration(WatermarkStyle style, Color bgColor, double padding) {
+  BoxDecoration _buildBoxDecoration(
+      WatermarkStyle style, Color bgColor, double padding) {
     if (style == WatermarkStyle.bottomBar) {
       return BoxDecoration(
         gradient: LinearGradient(
@@ -270,12 +273,12 @@ class WatermarkPreviewBuilder {
   }
 
   Widget _buildQrCodePreview(List<WatermarkPreviewLine> lines) {
-    final qrSize = 60.0;
-    final padding = 12.0;
+    const qrSize = 60.0;
+    const padding = 12.0;
 
     return Container(
       width: 240,
-      padding: EdgeInsets.all(padding),
+      padding: const EdgeInsets.all(padding),
       decoration: BoxDecoration(
         color: const Color(0xCC000000),
         borderRadius: BorderRadius.circular(8),
@@ -288,21 +291,21 @@ class WatermarkPreviewBuilder {
             height: qrSize,
             color: Colors.white,
             child: CustomPaint(
-              size: Size(qrSize, qrSize),
+              size: const Size(qrSize, qrSize),
               painter: PreviewQrCodePainter(data['antiFakeCode'] ?? ''),
             ),
           ),
-          SizedBox(width: 10),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: lines.map((line) {
                 return Padding(
-                  padding: EdgeInsets.only(bottom: 2),
+                  padding: const EdgeInsets.only(bottom: 2),
                   child: Text(
                     line.text,
-                    style: TextStyle(
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 11,
                     ),
@@ -324,7 +327,8 @@ class WatermarkPreviewLine {
   final bool isTitle;
   final bool isSubtitle;
 
-  WatermarkPreviewLine({required this.text, this.isTitle = false, this.isSubtitle = false});
+  WatermarkPreviewLine(
+      {required this.text, this.isTitle = false, this.isSubtitle = false});
 }
 
 /// 模拟 QR 码绘制
@@ -393,6 +397,7 @@ class _CameraCheckinScreenState extends State<CameraCheckinScreen> {
   int _watermarkRotationTurns = 0;
   AmapNearbyPlace? _selectedNearbyPlace;
   bool _isLoadingNearbyPlaces = false;
+  bool _isOpeningLocationPicker = false;
   List<AmapNearbyPlace> _nearbyPlaces = [];
   final Map<WatermarkFieldType, String> _fieldCustomValues = {};
 
@@ -460,32 +465,18 @@ class _CameraCheckinScreenState extends State<CameraCheckinScreen> {
 
   Future<void> _initGeo() async {
     // 第一步：尝试获取精确 GPS 定位
-    Position? pos;
-    try {
-      pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 15),
-      );
-    } catch (e) {
-      // 精确定位超时或失败，回退到设备缓存的最后已知位置
-      debugPrint('高精度定位失败: $e');
-      try {
-        pos = await Geolocator.getLastKnownPosition();
-      } catch (e) {
-        debugPrint('获取最后已知位置失败: $e');
-      }
-    }
+    final location = await AppLocationService.getCurrentLocation(
+      timeLimit: const Duration(seconds: 15),
+    );
 
-    if (pos != null && mounted) {
-      // GPS 原始坐标是 WGS84，需转为 GCJ02（高德/国测局坐标系）
-      // 否则与项目坐标（GCJ02）存在几百米偏移，导致围栏判定错误
-      final gcj = CoordUtils.wgs84ToGcj02(pos.latitude, pos.longitude);
+    if (location != null && mounted) {
       setState(() {
-        _latitude = gcj['latitude']!;
-        _longitude = gcj['longitude']!;
-        _altitude = pos!.altitude;
+        _latitude = location.latitude;
+        _longitude = location.longitude;
+        _altitude = location.altitude;
+        _currentAddress = location.address ?? _currentAddress;
       });
-      _resolveAddress(gcj['latitude']!, gcj['longitude']!);
+      _resolveAddress(location.latitude, location.longitude);
       _syncProjectFromAttendance();
     } else if (mounted) {
       // GPS 和缓存位置都失败，从 AttendanceBloc 回退
@@ -503,18 +494,18 @@ class _CameraCheckinScreenState extends State<CameraCheckinScreen> {
   /// 低精度定位回退（仅在前面的定位方式都失败时调用）
   Future<void> _retryLowAccuracyGeo() async {
     try {
-      final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.low,
+      final location = await AppLocationService.getCurrentLocation(
+        accuracy: LocationAccuracy.low,
         timeLimit: const Duration(seconds: 10),
       );
-      if (mounted) {
-        final gcj = CoordUtils.wgs84ToGcj02(pos.latitude, pos.longitude);
+      if (mounted && location != null) {
         setState(() {
-          _latitude = gcj['latitude']!;
-          _longitude = gcj['longitude']!;
-          _altitude = pos.altitude;
+          _latitude = location.latitude;
+          _longitude = location.longitude;
+          _altitude = location.altitude;
+          _currentAddress = location.address ?? _currentAddress;
         });
-        _resolveAddress(gcj['latitude']!, gcj['longitude']!);
+        _resolveAddress(location.latitude, location.longitude);
       }
     } catch (_) {
       // 最终回退失败，用户可以手动点击重试
@@ -713,14 +704,19 @@ class _CameraCheckinScreenState extends State<CameraCheckinScreen> {
   Map<String, String> _buildWatermarkData({String? antiFakeCode}) {
     final authState = context.read<AuthBloc>().state;
     final userName = authState is AuthAuthenticated ? authState.user.name : '-';
-    
+
     // 地址处理：优先使用选择的位置，其次是自定义地址，然后是解析的地址
     String locationText;
     if (_selectedNearbyPlace != null) {
       locationText = _selectedNearbyPlace!.displayText;
-    } else if (_fieldCustomValues[WatermarkFieldType.addressDetail]?.trim().isNotEmpty == true) {
+    } else if (_fieldCustomValues[WatermarkFieldType.addressDetail]
+            ?.trim()
+            .isNotEmpty ==
+        true) {
       locationText = _fieldCustomValues[WatermarkFieldType.addressDetail]!;
-    } else if (_currentAddress != null && _currentAddress!.isNotEmpty && !_currentAddress!.contains(',')) {
+    } else if (_currentAddress != null &&
+        _currentAddress!.isNotEmpty &&
+        !_currentAddress!.contains(',')) {
       locationText = _currentAddress!;
     } else {
       locationText = '定位中...';
@@ -736,36 +732,47 @@ class _CameraCheckinScreenState extends State<CameraCheckinScreen> {
       'timeFull': timeStr,
       'timeDate': '$dateStr  $weekdayStr',
       'timeOnly': timeOnlyStr,
-      'projectName': _fieldCustomValues[WatermarkFieldType.projectName]?.trim().isNotEmpty == true
+      'projectName': _fieldCustomValues[WatermarkFieldType.projectName]
+                  ?.trim()
+                  .isNotEmpty ==
+              true
           ? _fieldCustomValues[WatermarkFieldType.projectName]!
           : _selectedProjectName,
       'addressDetail': locationText,
       'userName': userName,
-      'gpsLat': _latitude == null ? '--' : '纬度: ${_latitude!.toStringAsFixed(6)}',
-      'gpsLng': _longitude == null ? '--' : '经度: ${_longitude!.toStringAsFixed(6)}',
+      'gpsLat':
+          _latitude == null ? '--' : '纬度: ${_latitude!.toStringAsFixed(6)}',
+      'gpsLng':
+          _longitude == null ? '--' : '经度: ${_longitude!.toStringAsFixed(6)}',
       'weather': _weather == '暂无' ? '已隐藏' : _weather,
-      'temperature': (_temperature != null && _temperature != '--') ? '温度: $_temperature℃' : '',
-      'humidity': (_humidity != null && _humidity != '--') ? '湿度: $_humidity%' : '',
-      'altitude': _altitude == null ? '' : '海拔: ${_altitude!.toStringAsFixed(1)}m',
-      'antiFakeCode': antiFakeCode != null ? '防伪码: $antiFakeCode' : '',
-      'workContent': _fieldCustomValues[WatermarkFieldType.workContent] ?? 
-          _fieldCustomValues[WatermarkFieldType.taskDescription] ?? 
-          _fieldCustomValues[WatermarkFieldType.inspectionContent] ?? 
-          _fieldCustomValues[WatermarkFieldType.acceptanceContent] ?? 
+      'temperature': (_temperature != '--') ? '温度: $_temperature℃' : '',
+      'humidity': (_humidity != '--') ? '湿度: $_humidity%' : '',
+      'altitude':
+          _altitude == null ? '' : '海拔: ${_altitude!.toStringAsFixed(1)}m',
+      'antiFakeCode': antiFakeCode ?? '',
+      'workContent': _fieldCustomValues[WatermarkFieldType.workContent] ??
+          _fieldCustomValues[WatermarkFieldType.taskDescription] ??
+          _fieldCustomValues[WatermarkFieldType.inspectionContent] ??
+          _fieldCustomValues[WatermarkFieldType.acceptanceContent] ??
           '',
       'manager': _fieldCustomValues[WatermarkFieldType.manager] ?? '',
       'teamLeader': _fieldCustomValues[WatermarkFieldType.teamLeader] ?? '',
       'position': _fieldCustomValues[WatermarkFieldType.position] ?? '',
       'remark': _fieldCustomValues[WatermarkFieldType.remark] ?? '',
       'companyName': _fieldCustomValues[WatermarkFieldType.companyName] ?? '',
-      'contractorOrg': _fieldCustomValues[WatermarkFieldType.contractorOrg] ?? '',
-      'supervisorOrg': _fieldCustomValues[WatermarkFieldType.supervisorOrg] ?? '',
+      'contractorOrg':
+          _fieldCustomValues[WatermarkFieldType.contractorOrg] ?? '',
+      'supervisorOrg':
+          _fieldCustomValues[WatermarkFieldType.supervisorOrg] ?? '',
       'clientOrg': _fieldCustomValues[WatermarkFieldType.clientOrg] ?? '',
       'homeowner': _fieldCustomValues[WatermarkFieldType.homeowner] ?? '',
       'deviceNo': _fieldCustomValues[WatermarkFieldType.deviceNo] ?? '',
-      'safetyStatus': _fieldCustomValues[WatermarkFieldType.safetyStatus] ?? '正常',
-      'deviceStatus': _fieldCustomValues[WatermarkFieldType.deviceStatus] ?? '正常',
-      'acceptanceResult': _fieldCustomValues[WatermarkFieldType.acceptanceResult] ?? '合格',
+      'safetyStatus':
+          _fieldCustomValues[WatermarkFieldType.safetyStatus] ?? '正常',
+      'deviceStatus':
+          _fieldCustomValues[WatermarkFieldType.deviceStatus] ?? '正常',
+      'acceptanceResult':
+          _fieldCustomValues[WatermarkFieldType.acceptanceResult] ?? '合格',
       'personCount': _fieldCustomValues[WatermarkFieldType.personCount] ?? '',
       'photoNo': _fieldCustomValues[WatermarkFieldType.photoNo] ?? '',
     };
@@ -794,16 +801,15 @@ class _CameraCheckinScreenState extends State<CameraCheckinScreen> {
     // 3) label → data
     if (slot.label.isNotEmpty) {
       final fieldType = WatermarkTemplate.labelToFieldType(slot.label);
-      if (fieldType != null) {
-        final value = _getFieldValueFromData(fieldType, data);
-        if (value.isNotEmpty) return value;
-      }
+      final value = _getFieldValueFromData(fieldType, data);
+      if (value.isNotEmpty) return value;
     }
     return '';
   }
 
   /// 从数据Map中获取字段值（静态方法，供预览和实际照片共用）
-  static String _getFieldValueFromData(WatermarkFieldType field, Map<String, String> data) {
+  static String _getFieldValueFromData(
+      WatermarkFieldType field, Map<String, String> data) {
     switch (field) {
       case WatermarkFieldType.timeFull:
         return data['timeFull'] ?? '';
@@ -909,46 +915,57 @@ class _CameraCheckinScreenState extends State<CameraCheckinScreen> {
   }
 
   Future<void> _openLocationPicker() async {
-    var lat = _latitude;
-    var lng = _longitude;
+    if (_isOpeningLocationPicker) return;
 
-    // 如果还没有坐标，先尝试重新定位
-    if (lat == null || lng == null) {
-      await _retryLowAccuracyGeo();
-      lat = _latitude;
-      lng = _longitude;
-    }
+    setState(() => _isOpeningLocationPicker = true);
 
-    // 仍然没有坐标，提示用户
-    if (lat == null || lng == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('无法获取位置，请检查定位权限和GPS开关')),
-        );
+    try {
+      var lat = _latitude;
+      var lng = _longitude;
+
+      // 如果还没有坐标，先尝试重新定位
+      if (lat == null || lng == null) {
+        await _retryLowAccuracyGeo();
+        lat = _latitude;
+        lng = _longitude;
       }
-      return;
-    }
 
-    final selected = await Navigator.of(context).push<AmapNearbyPlace>(
-      MaterialPageRoute(
-        builder: (_) => _LocationPickerScreen(
-          latitude: lat!,
-          longitude: lng!,
-          currentAddress: _currentAddress,
-          selectedPlace: _selectedNearbyPlace,
-          preloadedPlaces: _nearbyPlaces,
+      // 仍然没有坐标，提示用户
+      if (lat == null || lng == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('无法获取位置，请检查定位权限和GPS开关')),
+          );
+        }
+        return;
+      }
+
+      if (!mounted) return;
+      final selected = await Navigator.of(context).push<AmapNearbyPlace>(
+        MaterialPageRoute(
+          builder: (_) => _LocationPickerScreen(
+            latitude: lat!,
+            longitude: lng!,
+            currentAddress: _currentAddress,
+            selectedPlace: _selectedNearbyPlace,
+            preloadedPlaces: _nearbyPlaces,
+          ),
         ),
-      ),
-    );
+      );
 
-    if (!mounted || selected == null) return;
-    setState(() {
-      _selectedNearbyPlace = selected;
-      _fieldCustomValues[WatermarkFieldType.addressDetail] =
-          selected.displayText;
-      _fieldCustomValues[WatermarkFieldType.projectAddress] =
-          selected.displayText;
-    });
+      if (!mounted || selected == null) return;
+      setState(() {
+        _selectedNearbyPlace = selected;
+        _fieldCustomValues[WatermarkFieldType.addressDetail] =
+            selected.displayText;
+        _fieldCustomValues[WatermarkFieldType.projectAddress] =
+            selected.displayText;
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isOpeningLocationPicker = false);
+      }
+    }
   }
 
   Future<void> _initCamera() async {
@@ -1356,12 +1373,14 @@ class _CameraCheckinScreenState extends State<CameraCheckinScreen> {
                     return ListTile(
                       leading: Icon(
                         type.categoryIcon,
-                        color: isSelected ? colors.primary : colors.textTertiary,
+                        color:
+                            isSelected ? colors.primary : colors.textTertiary,
                       ),
                       title: Text(
                         type.name,
                         style: TextStyle(
-                          color: isSelected ? colors.primary : colors.textPrimary,
+                          color:
+                              isSelected ? colors.primary : colors.textPrimary,
                           fontWeight:
                               isSelected ? FontWeight.bold : FontWeight.normal,
                         ),
@@ -2115,9 +2134,10 @@ class _CameraCheckinScreenState extends State<CameraCheckinScreen> {
                                             ),
                                             decoration: BoxDecoration(
                                               color: colors.primary,
-                                              borderRadius: BorderRadius.circular(12),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
                                             ),
-                                            child: Text(
+                                            child: const Text(
                                               '使用中',
                                               style: TextStyle(
                                                 color: Colors.white,
@@ -2137,7 +2157,8 @@ class _CameraCheckinScreenState extends State<CameraCheckinScreen> {
                                   children: [
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Text(
                                             template.displayTitle,
@@ -2161,8 +2182,12 @@ class _CameraCheckinScreenState extends State<CameraCheckinScreen> {
                                       ),
                                     ),
                                     Icon(
-                                      isActive ? Icons.check_circle : Icons.chevron_right,
-                                      color: isActive ? colors.primary : colors.textTertiary,
+                                      isActive
+                                          ? Icons.check_circle
+                                          : Icons.chevron_right,
+                                      color: isActive
+                                          ? colors.primary
+                                          : colors.textTertiary,
                                       size: 22,
                                     ),
                                   ],

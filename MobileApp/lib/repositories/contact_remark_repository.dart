@@ -12,7 +12,9 @@ class ContactRemarkRepository {
     try {
       final decoded = jsonDecode(raw);
       if (decoded is! Map) return {};
-      return decoded.map((k, v) => MapEntry(k.toString(), v?.toString() ?? '')).cast<String, String>()
+      return decoded
+          .map((k, v) => MapEntry(k.toString(), v?.toString() ?? ''))
+          .cast<String, String>()
         ..removeWhere((k, v) => v.trim().isEmpty);
     } catch (_) {
       return {};
@@ -44,7 +46,9 @@ class ContactRemarkRepository {
     try {
       final decoded = jsonDecode(raw);
       if (decoded is! Map) return {};
-      return decoded.map((k, v) => MapEntry(k.toString(), v?.toString() ?? '')).cast<String, String>()
+      return decoded
+          .map((k, v) => MapEntry(k.toString(), v?.toString() ?? ''))
+          .cast<String, String>()
         ..removeWhere((k, v) => v.trim().isEmpty);
     } catch (_) {
       return {};
@@ -69,4 +73,3 @@ class ContactRemarkRepository {
     await prefs.setString(_avatarKey, jsonEncode(all));
   }
 }
-

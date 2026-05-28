@@ -5,7 +5,8 @@ class Checkin {
   final int id;
   final int userId;
   final int? projectId;
-  final String type; // 'clock_in', 'clock_out', 'site_visit', 'progress', 'safety', 'device', 'custom', etc.
+  final String
+      type; // 'clock_in', 'clock_out', 'site_visit', 'progress', 'safety', 'device', 'custom', etc.
   final double? latitude;
   final double? longitude;
   final String address;
@@ -16,6 +17,8 @@ class Checkin {
   final DateTime createdAt;
   final String? projectName;
   final String? watermarkCode;
+  final String? rawStatus;
+  final String? attendanceStatus;
 
   Checkin({
     required this.id,
@@ -32,6 +35,8 @@ class Checkin {
     required this.createdAt,
     this.projectName,
     this.watermarkCode,
+    this.rawStatus,
+    this.attendanceStatus,
   });
 
   factory Checkin.fromJson(Map<String, dynamic> json) {
@@ -61,6 +66,8 @@ class Checkin {
           : DateTime.parse(dateStr),
       projectName: json['project_name'],
       watermarkCode: json['watermark_code'],
+      rawStatus: json['raw_status'],
+      attendanceStatus: json['attendance_status'],
     );
   }
 
@@ -140,5 +147,27 @@ class Checkin {
   }
 
   /// 是否为考勤类型（上下班）
-  bool get isAttendanceType => type == 'in' || type == 'clock_in' || type == 'out' || type == 'clock_out';
+  bool get isAttendanceType =>
+      type == 'in' ||
+      type == 'clock_in' ||
+      type == 'out' ||
+      type == 'clock_out';
+
+  String? get _effectiveStatus => attendanceStatus ?? rawStatus;
+
+  String? get statusText {
+    switch (_effectiveStatus) {
+      case 'late':
+        if (type == 'out' || type == 'clock_out') return null;
+        return '迟到';
+      case 'early':
+      case 'early_leave':
+        if (type == 'in' || type == 'clock_in') return null;
+        return '早退';
+      default:
+        return null;
+    }
+  }
+
+  bool get isAbnormal => statusText != null;
 }
