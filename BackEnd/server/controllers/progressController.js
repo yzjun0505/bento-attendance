@@ -26,13 +26,14 @@ async function getWorkbench(req, res) {
 
     const result = [];
     for (const project of projects) {
-      let stats = { totalNodes: 0, completedNodes: 0, inProgressNodes: 0, overdueNodes: 0, pausedNodes: 0, overallProgress: 0 };
+      let stats = { totalNodes: 0, completedNodes: 0, inProgressNodes: 0, overdueNodes: 0, pendingReviewNodes: 0, pausedNodes: 0, overallProgress: 0 };
       try {
         const [[s]] = await db.query(`
           SELECT
             COUNT(*) as totalNodes,
             SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completedNodes,
             SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as inProgressNodes,
+            SUM(CASE WHEN status = 'pending_review' THEN 1 ELSE 0 END) as pendingReviewNodes,
             SUM(CASE WHEN plan_end_date < CURDATE() AND status != 'completed' THEN 1 ELSE 0 END) as overdueNodes,
             SUM(CASE WHEN status = 'paused' THEN 1 ELSE 0 END) as pausedNodes,
             ROUND(AVG(progress_percent), 1) as overallProgress
@@ -71,6 +72,7 @@ async function getWorkbench(req, res) {
         completedNodes: stats.completedNodes || 0,
         inProgressNodes: stats.inProgressNodes || 0,
         overdueNodes: stats.overdueNodes || 0,
+        pendingReviewNodes: stats.pendingReviewNodes || 0,
         pausedNodes: stats.pausedNodes || 0,
         lastReportTime: lastTime || null,
         assigneeCount,
@@ -101,13 +103,14 @@ async function getProjectSummary(req, res) {
       return res.status(403).json(errorResponse('无权限访问该项目', 403));
     }
 
-    let stats = { totalNodes: 0, completedNodes: 0, inProgressNodes: 0, overdueNodes: 0, pausedNodes: 0, overallProgress: 0 };
+    let stats = { totalNodes: 0, completedNodes: 0, inProgressNodes: 0, overdueNodes: 0, pendingReviewNodes: 0, pausedNodes: 0, overallProgress: 0 };
     try {
       const [[s]] = await db.query(`
         SELECT
           COUNT(*) as totalNodes,
           SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completedNodes,
           SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as inProgressNodes,
+          SUM(CASE WHEN status = 'pending_review' THEN 1 ELSE 0 END) as pendingReviewNodes,
           SUM(CASE WHEN plan_end_date < CURDATE() AND status != 'completed' THEN 1 ELSE 0 END) as overdueNodes,
           SUM(CASE WHEN status = 'paused' THEN 1 ELSE 0 END) as pausedNodes,
           ROUND(AVG(progress_percent), 1) as overallProgress
@@ -151,7 +154,7 @@ async function getProjectSummary(req, res) {
         SELECT pr.id, pr.node_id as nodeId, pr.description, pr.photo,
                pr.progress_percent as progressPercent,
                pr.risk_note as riskNote, pr.blocker_note as blockerNote,
-               pr.photos, pr.created_at as createdAt,
+               pr.photos, pr.watermark_codes as watermarkCodes, pr.created_at as createdAt,
                u.name as reporterName, tn.title as nodeTitle
         FROM progress_reports pr
         INNER JOIN task_nodes tn ON pr.node_id = tn.id
@@ -170,6 +173,7 @@ async function getProjectSummary(req, res) {
       completedNodes: stats.completedNodes || 0,
       inProgressNodes: stats.inProgressNodes || 0,
       overdueNodes: stats.overdueNodes || 0,
+      pendingReviewNodes: stats.pendingReviewNodes || 0,
       pausedNodes: stats.pausedNodes || 0,
       phases: phaseStats,
       recentReports: reports,

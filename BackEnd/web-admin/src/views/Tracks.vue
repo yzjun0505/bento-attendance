@@ -69,11 +69,11 @@
           <!-- 统计 -->
           <div class="panel-card stats-grid">
             <div class="stat-box">
-              <div class="stat-num" style="color:var(--accent-blue)">{{ trackData.total_distance || '0' }}</div>
-              <div class="stat-label">总里程(km)</div>
+              <div class="stat-num" style="color:var(--accent-blue)">{{ formatDistance(trackData.total_distance) }}</div>
+              <div class="stat-label">总里程</div>
             </div>
             <div class="stat-box">
-              <div class="stat-num" style="color:var(--accent-green)">{{ trackData.points?.length || 0 }}</div>
+              <div class="stat-num" style="color:var(--accent-green)">{{ trackData.total_points || 0 }}</div>
               <div class="stat-label">轨迹点数</div>
             </div>
           </div>
@@ -91,7 +91,7 @@
                 @click="focusStop(stop)"
               >
                 <div class="stop-title">{{ stop.address || `停留点 ${idx + 1}` }}</div>
-                <div class="stop-meta">{{ stop.start_time }} ~ {{ stop.end_time }} · {{ stop.duration }}分钟</div>
+                <div class="stop-meta">{{ formatPointTime(stop.start || stop.start_time) }} ~ {{ formatPointTime(stop.end || stop.end_time) }} · {{ stop.duration }}分钟</div>
               </div>
             </div>
           </div>
@@ -127,6 +127,7 @@
 import { ref, reactive, onMounted, nextTick, watch, onUnmounted } from 'vue'
 import { getTrack } from '@/api/tracks'
 import { getUsers } from '@/api/users'
+import { getLatestLocations } from '@/api/location'
 import { ElMessage } from 'element-plus'
 import { Search, MapLocation, Location, Clock } from '@element-plus/icons-vue'
 
@@ -149,6 +150,7 @@ let map = null
 let trackLine = null
 let markers = []
 let movingMarker = null
+let currentMapCenter = [106.713478, 26.578343]
 
 const selectedUserName = ref('')
 
@@ -189,11 +191,97 @@ function createMap() {
   try {
     map = new window.AMap.Map('track-map', {
       zoom: 14,
+      center: currentMapCenter,
       mapStyle: 'amap://styles/dark'
     })
+    initMapCenter()
   } catch (e) {
     console.error('地图初始化失败:', e)
   }
+}
+
+async function initMapCenter() {
+  const browserCenter = await getBrowserCenter()
+  if (browserCenter) {
+    setInitialCenter(browserCenter, 15)
+    return
+  }
+
+  try {
+    const res = await getLatestLocations()
+    const locations = Array.isArray(res.data) ? res.data : (res.data?.locations || [])
+    const first = locations.find(item => isValidPoint(item))
+    if (first) {
+      setInitialCenter([Number(first.longitude), Number(first.latitude)], 15)
+      return
+    }
+  } catch (_) {
+    // 实时位置接口可能受权限限制，继续使用业务默认中心。
+  }
+
+  setInitialCenter(currentMapCenter, 13)
+}
+
+function getBrowserCenter() {
+  return new Promise(resolve => {
+    if (!navigator.geolocation) {
+      resolve(null)
+      return
+    }
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve([pos.coords.longitude, pos.coords.latitude]),
+      () => resolve(null),
+      { enableHighAccuracy: false, timeout: 5000, maximumAge: 5 * 60 * 1000 }
+    )
+  })
+}
+
+function setInitialCenter(center, zoom = 14) {
+  if (!Array.isArray(center) || center.length !== 2 || !map) return
+  currentMapCenter = center
+  map.setZoomAndCenter(zoom, center)
+}
+
+function isValidPoint(point) {
+  const lat = Number(point?.latitude)
+  const lng = Number(point?.longitude)
+  return Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180 &&
+    !(lat === 0 && lng === 0)
+}
+
+function normalizeTrackData(data = {}) {
+  const points = (data.track || data.points || []).filter(isValidPoint)
+  const stops = data.stay_points || data.stops || []
+  const checkins = points.filter(point => point.source === 'checkin')
+  const totalPoints = Number(data.total_points ?? points.length) || points.length
+  const totalDistance = points.length === 0 ? 0 : Number(data.total_distance || 0)
+  return {
+    ...data,
+    points,
+    stops,
+    checkins,
+    total_points: points.length === 0 ? 0 : totalPoints,
+    total_distance: totalDistance
+  }
+}
+
+function formatDistance(value) {
+  const meters = Number(value || 0)
+  if (!Number.isFinite(meters) || meters <= 0) return '0 m'
+  if (meters < 1000) return `${Math.round(meters)} m`
+  return `${(meters / 1000).toFixed(2)} km`
+}
+
+function formatPointTime(value) {
+  if (!value) return '-'
+  const text = String(value)
+  if (text.includes(' ')) return text.slice(11, 16)
+  return text.slice(0, 16)
 }
 
 async function loadTrack() {
@@ -204,7 +292,7 @@ async function loadTrack() {
   stopPlay()
   try {
     const res = await getTrack(filters.user_id, filters.date)
-    trackData.value = res.data
+    trackData.value = normalizeTrackData(res.data)
     await nextTick()
     drawTrack()
   } catch (e) {
@@ -224,7 +312,10 @@ function drawTrack() {
   movingMarker = null
 
   const points = trackData.value.points || []
-  if (points.length === 0) return
+  if (points.length === 0) {
+    playProgress.value = 0
+    return
+  }
 
   const path = points.map(p => new window.AMap.LngLat(p.longitude, p.latitude))
 
@@ -273,7 +364,7 @@ function drawTrack() {
   }
 
   // 自适应视野
-  map.setFitView(markers.concat([trackLine]))
+  map.setFitView(markers.concat([trackLine]), false, [80, 80, 80, 80])
 
   // 移动小车图标
   movingMarker = new window.AMap.Marker({

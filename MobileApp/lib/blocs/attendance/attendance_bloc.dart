@@ -12,7 +12,7 @@ import '../../repositories/checkin_type_repository.dart';
 import '../../repositories/schedule_repository.dart';
 import '../../repositories/offline_checkin_repository.dart';
 import '../../utils/amap_geo_service.dart';
-import '../../utils/coord_utils.dart';
+import '../../utils/app_location_service.dart';
 import '../../models/checkin_model.dart';
 import '../../models/checkin_type_model.dart';
 import '../../services/local_notification_service.dart';
@@ -86,14 +86,18 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
     }
 
     // 迟到提醒：超过上班时间且未打卡
-    if (!s.isClockInCompleted && !_lateReminderSent && s.todayShiftStart != null) {
+    if (!s.isClockInCompleted &&
+        !_lateReminderSent &&
+        s.todayShiftStart != null) {
       final now = DateTime.now();
       final startParts = s.todayShiftStart!.split(':');
       if (startParts.length >= 2) {
         final startHour = int.tryParse(startParts[0]) ?? 9;
         final startMin = int.tryParse(startParts[1]) ?? 0;
-        final workStart = DateTime(now.year, now.month, now.day, startHour, startMin);
-        final lateThreshold = workStart.add(Duration(minutes: s.lateTolerance + 5));
+        final workStart =
+            DateTime(now.year, now.month, now.day, startHour, startMin);
+        final lateThreshold =
+            workStart.add(Duration(minutes: s.lateTolerance + 5));
         if (now.isAfter(lateThreshold)) {
           _lateReminderSent = true;
           LocalNotificationService().showAttendanceReminder(
@@ -105,7 +109,9 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
     }
 
     // 下班提醒：超过下班时间且未打下班卡（但已打上班卡）
-    if (s.isClockInCompleted && !s.isClockOutCompleted && s.todayShiftEnd != null) {
+    if (s.isClockInCompleted &&
+        !s.isClockOutCompleted &&
+        s.todayShiftEnd != null) {
       final now = DateTime.now();
       final endParts = s.todayShiftEnd!.split(':');
       if (endParts.length >= 2) {
@@ -265,33 +271,11 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
     Position? position;
     try {
       debugPrint('>>> [Async] 开始获取定位...');
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-
-      if (permission == LocationPermission.whileInUse ||
-          permission == LocationPermission.always) {
-        // 使用较短的超时，如果拿不到精确定位就先不更新
-        final rawPos = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-          forceAndroidLocationManager: true,
-          timeLimit: const Duration(seconds: 10),
-        );
-        final gcj = CoordUtils.wgs84ToGcj02(rawPos.latitude, rawPos.longitude);
-        position = Position(
-          latitude: gcj['latitude']!,
-          longitude: gcj['longitude']!,
-          timestamp: rawPos.timestamp,
-          accuracy: rawPos.accuracy,
-          altitude: rawPos.altitude,
-          heading: rawPos.heading,
-          speed: rawPos.speed,
-          speedAccuracy: rawPos.speedAccuracy,
-          altitudeAccuracy: rawPos.altitudeAccuracy,
-          headingAccuracy: rawPos.headingAccuracy,
-          isMocked: rawPos.isMocked,
-        );
+      final location = await AppLocationService.getCurrentLocation(
+        timeLimit: const Duration(seconds: 10),
+      );
+      if (location != null) {
+        position = location.toPosition();
         debugPrint('>>> [Async] 定位获取成功');
       }
     } catch (e) {

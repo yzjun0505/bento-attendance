@@ -17,6 +17,7 @@ import 'package:tencent_chat_uikit/contacts_page.dart';
 import 'attendance/map_dashboard_screen.dart';
 import 'history/history_screen.dart';
 import 'profile/profile_screen.dart';
+import 'progress/progress_workbench_screen.dart';
 
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
@@ -38,10 +39,17 @@ class MainNavigationState extends State<MainNavigation> {
   @override
   void initState() {
     super.initState();
-    // 开启实时定位上报
-    context.read<TrackingBloc>().add(StartTracking());
-    // 加载初始数据
-    context.read<HomeBloc>().add(const LoadHomeSummary());
+    final authState = context.read<AuthBloc>().state;
+    final isClient =
+        authState is AuthAuthenticated && authState.user.role == 'client';
+    if (isClient) {
+      _currentIndex = 2;
+    } else {
+      // 开启实时定位上报
+      context.read<TrackingBloc>().add(StartTracking());
+      // 加载初始数据
+      context.read<HomeBloc>().add(const LoadHomeSummary());
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) => _autoCheckForUpdate());
   }
 
@@ -66,52 +74,58 @@ class MainNavigationState extends State<MainNavigation> {
         final isOffline = authState is AuthAuthenticated && authState.isOffline;
         final isIMReady =
             authState is AuthAuthenticated && authState.imInitialized;
-        return Scaffold(
-          body: Column(
-            children: [
-              if (isOffline)
-                OfflineBanner(
-                  onRetry: () => context.read<AuthBloc>().add(AppStarted()),
+        final isClient =
+            authState is AuthAuthenticated && authState.user.role == 'client';
+        final pages = isClient
+            ? [
+                if (isIMReady)
+                  const ConversationsPage()
+                else
+                  const _IMLoadingPlaceholder(label: '消息'),
+                if (isIMReady)
+                  const ContactsPage()
+                else
+                  const _IMLoadingPlaceholder(label: '通讯录'),
+                const ProgressWorkbenchScreen(),
+                const ProfileScreen(),
+              ]
+            : [
+                if (isIMReady)
+                  const ConversationsPage()
+                else
+                  const _IMLoadingPlaceholder(label: '消息'),
+                if (isIMReady)
+                  const ContactsPage()
+                else
+                  const _IMLoadingPlaceholder(label: '通讯录'),
+                const MapDashboardScreen(),
+                const HistoryScreen(),
+                const ProfileScreen(),
+              ];
+        final destinations = isClient
+            ? const [
+                NavigationDestination(
+                  icon: Icon(Icons.chat_bubble_outline),
+                  selectedIcon: Icon(Icons.chat_bubble),
+                  label: '消息',
                 ),
-              Expanded(
-                child: IndexedStack(
-                  index: _currentIndex,
-                  children: [
-                    // TUIKit 页面需要等 IM 登录完成后才能渲染，
-                    // 否则 ConversationsPage/ContactsPage 在未登录状态下会闪退
-                    if (isIMReady)
-                      const ConversationsPage()
-                    else
-                      const _IMLoadingPlaceholder(label: '消息'),
-                    if (isIMReady)
-                      const ContactsPage()
-                    else
-                      const _IMLoadingPlaceholder(label: '通讯录'),
-                    const MapDashboardScreen(),
-                    const HistoryScreen(),
-                    const ProfileScreen(),
-                  ],
+                NavigationDestination(
+                  icon: Icon(Icons.people_outline),
+                  selectedIcon: Icon(Icons.people),
+                  label: '通讯录',
                 ),
-              ),
-            ],
-          ),
-          bottomNavigationBar: Container(
-            decoration: BoxDecoration(
-              color: colors.navBarBg,
-              border: Border(
-                top: BorderSide(color: colors.navBarBorder, width: 0.5),
-              ),
-            ),
-            child: NavigationBar(
-              selectedIndex: _currentIndex,
-              onDestinationSelected: (index) {
-                setState(() => _currentIndex = index);
-              },
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              indicatorColor: colors.primaryLight,
-              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.timeline_outlined),
+                  selectedIcon: Icon(Icons.timeline),
+                  label: '项目进度',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.person_outline),
+                  selectedIcon: Icon(Icons.person),
+                  label: '我的',
+                ),
+              ]
+            : const [
                 NavigationDestination(
                   icon: Icon(Icons.chat_bubble_outline),
                   selectedIcon: Icon(Icons.chat_bubble),
@@ -137,7 +151,41 @@ class MainNavigationState extends State<MainNavigation> {
                   selectedIcon: Icon(Icons.person),
                   label: '我的',
                 ),
-              ],
+              ];
+        final selectedIndex =
+            _currentIndex >= pages.length ? pages.length - 1 : _currentIndex;
+        return Scaffold(
+          body: Column(
+            children: [
+              if (isOffline)
+                OfflineBanner(
+                  onRetry: () => context.read<AuthBloc>().add(AppStarted()),
+                ),
+              Expanded(
+                child: IndexedStack(
+                  index: selectedIndex,
+                  children: pages,
+                ),
+              ),
+            ],
+          ),
+          bottomNavigationBar: Container(
+            decoration: BoxDecoration(
+              color: colors.navBarBg,
+              border: Border(
+                top: BorderSide(color: colors.navBarBorder, width: 0.5),
+              ),
+            ),
+            child: NavigationBar(
+              selectedIndex: selectedIndex,
+              onDestinationSelected: (index) {
+                setState(() => _currentIndex = index);
+              },
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              indicatorColor: colors.primaryLight,
+              labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+              destinations: destinations,
             ),
           ),
         );

@@ -37,7 +37,7 @@ async function getProjects(req, res) {
       params
     );
 
-    // 为每个项目附加人员数量
+    // 为每个项目附加人员数量、经理和进度摘要
     for (const project of rows) {
       const [userCount] = await db.execute(
         'SELECT COUNT(*) as count FROM users WHERE project_id = ? AND status = 1',
@@ -55,6 +55,44 @@ async function getProjects(req, res) {
       );
       project.manager_count = managerRows.length;
       project.managers = managerRows;
+
+      const [clientRows] = await db.execute(
+        `SELECT u.id, u.name, u.username
+         FROM project_clients pc
+         INNER JOIN users u ON pc.client_id = u.id
+         WHERE pc.project_id = ? AND u.status = 1
+         ORDER BY u.name, u.username`,
+        [project.id]
+      );
+      project.client_count = clientRows.length;
+      project.clients = clientRows;
+
+      try {
+        const [[progressStats]] = await db.query(`
+          SELECT
+            COUNT(*) as totalNodes,
+            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completedNodes,
+            SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as inProgressNodes,
+            SUM(CASE WHEN status = 'pending_review' THEN 1 ELSE 0 END) as pendingReviewNodes,
+            SUM(CASE WHEN plan_end_date < CURDATE() AND status != 'completed' THEN 1 ELSE 0 END) as overdueNodes,
+            ROUND(AVG(progress_percent), 1) as overallProgress
+          FROM task_nodes
+          WHERE project_id = ?
+        `, [project.id]);
+        project.totalNodes = progressStats.totalNodes || 0;
+        project.completedNodes = progressStats.completedNodes || 0;
+        project.inProgressNodes = progressStats.inProgressNodes || 0;
+        project.pendingReviewNodes = progressStats.pendingReviewNodes || 0;
+        project.overdueNodes = progressStats.overdueNodes || 0;
+        project.overallProgress = Math.round(progressStats.overallProgress || 0);
+      } catch (_) {
+        project.totalNodes = 0;
+        project.completedNodes = 0;
+        project.inProgressNodes = 0;
+        project.pendingReviewNodes = 0;
+        project.overdueNodes = 0;
+        project.overallProgress = 0;
+      }
     }
 
     res.json(successResponse({
@@ -270,6 +308,15 @@ async function getAuthorizedProjects(req, res) {
         ORDER BY p.name
       `, [userId]);
       projects = rows;
+    } else if (role === 'client') {
+      const [rows] = await db.query(`
+        SELECT p.id, p.name, p.address, p.status
+        FROM projects p
+        INNER JOIN project_clients pc ON p.id = pc.project_id
+        WHERE pc.client_id = ?
+        ORDER BY p.name
+      `, [userId]);
+      projects = rows;
     } else {
       const [userRows] = await db.query('SELECT project_id FROM users WHERE id = ?', [userId]);
       if (!userRows.length || !userRows[0].project_id) {
@@ -284,13 +331,14 @@ async function getAuthorizedProjects(req, res) {
 
     const result = [];
     for (const project of projects) {
-      let stats = { totalNodes: 0, completedNodes: 0, inProgressNodes: 0, overdueNodes: 0, pausedNodes: 0, overallProgress: 0 };
+      let stats = { totalNodes: 0, completedNodes: 0, inProgressNodes: 0, overdueNodes: 0, pendingReviewNodes: 0, pausedNodes: 0, overallProgress: 0 };
       try {
         const [[s]] = await db.query(`
           SELECT
             COUNT(*) as totalNodes,
             SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completedNodes,
             SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as inProgressNodes,
+            SUM(CASE WHEN status = 'pending_review' THEN 1 ELSE 0 END) as pendingReviewNodes,
             SUM(CASE WHEN plan_end_date < CURDATE() AND status != 'completed' THEN 1 ELSE 0 END) as overdueNodes,
             SUM(CASE WHEN status = 'paused' THEN 1 ELSE 0 END) as pausedNodes,
             ROUND(AVG(progress_percent), 1) as overallProgress
@@ -333,6 +381,7 @@ async function getAuthorizedProjects(req, res) {
         completedNodes: stats.completedNodes || 0,
         inProgressNodes: stats.inProgressNodes || 0,
         overdueNodes: stats.overdueNodes || 0,
+        pendingReviewNodes: stats.pendingReviewNodes || 0,
         pausedNodes: stats.pausedNodes || 0,
         overallProgress: Math.round(stats.overallProgress || 0),
         lastReportTime,

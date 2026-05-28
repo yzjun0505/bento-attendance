@@ -11,7 +11,6 @@ import '../../blocs/attendance/attendance_event.dart';
 import '../../blocs/auth/auth_bloc.dart';
 import '../../blocs/auth/auth_state.dart';
 import '../../utils/coord_utils.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 
 /// 高德地图 Web JS API Key
 /// 请在运行时通过 --dart-define=AMAP_WEB_KEY=your_key 传入
@@ -269,7 +268,8 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
                         BentoSpacing.space20,
                         BentoSpacing.space8,
                       ),
-                      child: _buildCheckinSection(context, state, colors, theme),
+                      child:
+                          _buildCheckinSection(context, state, colors, theme),
                     ),
                     // 底部安全区
                     SizedBox(height: mediaQuery.padding.bottom),
@@ -484,6 +484,7 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
     required BuildContext context,
     required String title,
     required String time,
+    required String checkinType,
     String? scheduledTime,
     required bool isCompleted,
     required BentoColors colors,
@@ -492,11 +493,17 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
     bool enabled = true,
     required VoidCallback onTap,
   }) {
-    // 判断是否迟到/早退
-    bool isLate = false;
+    String? abnormalText;
     if (isCompleted && scheduledTime != null && time != '未打卡') {
-      isLate = time.compareTo(scheduledTime) > 0;
+      final isClockIn = checkinType == 'in' || checkinType == 'clock_in';
+      final isClockOut = checkinType == 'out' || checkinType == 'clock_out';
+      if (isClockIn && time.compareTo(scheduledTime) > 0) {
+        abnormalText = '迟到';
+      } else if (isClockOut && time.compareTo(scheduledTime) < 0) {
+        abnormalText = '早退';
+      }
     }
+    final isAbnormal = abnormalText != null;
 
     return BentoCard.interactive(
       key: key,
@@ -529,7 +536,7 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
               time == '未打卡' ? (scheduledTime ?? '--:--') : time,
               style: theme.textTheme.headlineMedium?.copyWith(
                 color: isCompleted
-                    ? (isLate ? colors.warning : colors.success)
+                    ? (isAbnormal ? colors.warning : colors.success)
                     : colors.textPrimary,
                 fontWeight: FontWeight.bold,
                 fontSize: 20,
@@ -548,15 +555,15 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  isLate ? Icons.warning_amber_rounded : Icons.check_circle,
+                  isAbnormal ? Icons.warning_amber_rounded : Icons.check_circle,
                   size: 14,
-                  color: isLate ? colors.warning : colors.success,
+                  color: isAbnormal ? colors.warning : colors.success,
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  isLate ? '迟到' : '已打卡',
+                  abnormalText ?? '已打卡',
                   style: theme.textTheme.labelSmall?.copyWith(
-                    color: isLate ? colors.warning : colors.success,
+                    color: isAbnormal ? colors.warning : colors.success,
                   ),
                 ),
               ],
@@ -704,7 +711,8 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
   Widget _buildCheckinSection(BuildContext context, AttendanceState state,
       BentoColors colors, ThemeData theme) {
     final authState = context.read<AuthBloc>().state;
-    final role = authState is AuthAuthenticated ? authState.user.role : 'worker';
+    final role =
+        authState is AuthAuthenticated ? authState.user.role : 'worker';
     final isAdmin = role == 'admin';
 
     return Column(
@@ -734,7 +742,8 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
             child: Row(
               children: [
                 Container(
-                  width: 6, height: 32,
+                  width: 6,
+                  height: 32,
                   decoration: BoxDecoration(
                     color: state.todayShiftColor != null
                         ? Color(int.parse(
@@ -749,10 +758,13 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('今日排班：${state.todayShiftName}',
-                          style: theme.textTheme.bodyMedium
-                              ?.copyWith(color: colors.textPrimary, fontWeight: FontWeight.w600)),
-                      Text('${state.todayShiftStart ?? '--:--'} - ${state.todayShiftEnd ?? '--:--'}',
-                          style: theme.textTheme.bodySmall?.copyWith(color: colors.textSecondary)),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                              color: colors.textPrimary,
+                              fontWeight: FontWeight.w600)),
+                      Text(
+                          '${state.todayShiftStart ?? '--:--'} - ${state.todayShiftEnd ?? '--:--'}',
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(color: colors.textSecondary)),
                     ],
                   ),
                 ),
@@ -771,10 +783,12 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.admin_panel_settings, size: 20, color: colors.primary),
+                Icon(Icons.admin_panel_settings,
+                    size: 20, color: colors.primary),
                 const SizedBox(width: 8),
                 Text('管理员视图 · 监督模式',
-                    style: theme.textTheme.bodySmall?.copyWith(color: colors.primary)),
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: colors.primary)),
               ],
             ),
           )
@@ -783,9 +797,11 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
           Row(
             children: [
               Container(
-                width: 4, height: 18,
+                width: 4,
+                height: 18,
                 decoration: BoxDecoration(
-                  color: colors.primary, borderRadius: BorderRadius.circular(2)),
+                    color: colors.primary,
+                    borderRadius: BorderRadius.circular(2)),
               ),
               const SizedBox(width: 8),
               Text('今日考勤',
@@ -796,7 +812,8 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
                   state.attendanceGroupName!.isNotEmpty) ...[
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
                     color: colors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(4),
@@ -815,13 +832,20 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
               Expanded(
                 child: _buildCheckinCard(
                   key: const ValueKey('checkin_clock_in'),
-                  context: context, title: '上班',
-                  time: state is AttendanceLoaded ? state.clockInTimeText : '未打卡',
-                  scheduledTime: state is AttendanceLoaded ? state.workStartTime : null,
-                  isCompleted: state is AttendanceLoaded && state.isClockInCompleted,
+                  context: context,
+                  title: '上班',
+                  checkinType: 'clock_in',
+                  time:
+                      state is AttendanceLoaded ? state.clockInTimeText : '未打卡',
+                  scheduledTime:
+                      state is AttendanceLoaded ? state.workStartTime : null,
+                  isCompleted:
+                      state is AttendanceLoaded && state.isClockInCompleted,
                   isSubmitting: state is AttendanceLoaded && state.isSubmitting,
-                  enabled: state is AttendanceLoaded && !state.isClockInCompleted,
-                  colors: colors, theme: theme,
+                  enabled:
+                      state is AttendanceLoaded && !state.isClockInCompleted,
+                  colors: colors,
+                  theme: theme,
                   onTap: () => _handleCheckin(context, 'clock_in'),
                 ),
               ),
@@ -831,14 +855,22 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
               Expanded(
                 child: _buildCheckinCard(
                   key: const ValueKey('checkin_clock_out'),
-                  context: context, title: '下班',
-                  time: state is AttendanceLoaded ? state.clockOutTimeText : '未打卡',
-                  scheduledTime: state is AttendanceLoaded ? state.workEndTime : null,
-                  isCompleted: state is AttendanceLoaded && state.isClockOutCompleted,
+                  context: context,
+                  title: '下班',
+                  checkinType: 'clock_out',
+                  time: state is AttendanceLoaded
+                      ? state.clockOutTimeText
+                      : '未打卡',
+                  scheduledTime:
+                      state is AttendanceLoaded ? state.workEndTime : null,
+                  isCompleted:
+                      state is AttendanceLoaded && state.isClockOutCompleted,
                   isSubmitting: state is AttendanceLoaded && state.isSubmitting,
                   enabled: state is AttendanceLoaded &&
-                      state.isClockInCompleted && !state.isClockOutCompleted,
-                  colors: colors, theme: theme,
+                      state.isClockInCompleted &&
+                      !state.isClockOutCompleted,
+                  colors: colors,
+                  theme: theme,
                   onTap: () => _handleCheckin(context, 'clock_out'),
                 ),
               ),
@@ -1020,6 +1052,7 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
           isClockIn: isClockIn,
           projectName: state.activeProjectName,
         );
+        if (!context.mounted) return;
         if (confirmed != true) return;
       }
 
@@ -1033,7 +1066,8 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
           ? 'clock_in'
           : (type == 'clock_out' || type == 'out' ? 'clock_out' : type);
 
-      debugPrint('[MapDashboard] _handleCheckin dispatching SubmitCheckin(type=$normalizedType)');
+      debugPrint(
+          '[MapDashboard] _handleCheckin dispatching SubmitCheckin(type=$normalizedType)');
 
       attendanceBloc.add(SubmitCheckin(
         type: normalizedType,
@@ -1107,9 +1141,7 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      isClockIn
-                          ? '确认后即记录为今日上班时间'
-                          : '确认后即记录为今日下班时间',
+                      isClockIn ? '确认后即记录为今日上班时间' : '确认后即记录为今日下班时间',
                       style: TextStyle(color: colors.warning, fontSize: 12),
                     ),
                   ),
@@ -1136,7 +1168,8 @@ class _MapDashboardScreenState extends State<MapDashboardScreen>
               ),
             ),
             child: Text('确认$label',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -1189,7 +1222,7 @@ class _AMapWrapperState extends State<_AMapWrapper> {
         desiredAccuracy: LocationAccuracy.low,
         timeLimit: const Duration(seconds: 5),
       );
-      if (pos != null && mounted) {
+      if (mounted) {
         final gcj = CoordUtils.wgs84ToGcj02(pos.latitude, pos.longitude);
         setState(() {
           _cachedLat ??= gcj['latitude'];

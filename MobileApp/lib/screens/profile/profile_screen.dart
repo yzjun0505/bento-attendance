@@ -535,6 +535,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     switch (role) {
       case 'admin':
         return '系统管理员';
+      case 'manager':
+        return '项目经理';
+      case 'worker':
+        return '工人';
+      case 'client':
+        return '甲方用户';
       case 'office':
         return '办公室文员';
       case 'construction':

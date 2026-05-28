@@ -21,6 +21,14 @@ function toPublicUrl(req, value) {
   return `${getPublicBaseUrl(req)}${path}`;
 }
 
+function normalizePhone(phone) {
+  return String(phone || '').trim();
+}
+
+function isValidPhone(phone) {
+  return /^\d{11}$/.test(normalizePhone(phone));
+}
+
 /**
  * 获取用户列表
  * GET /api/users
@@ -112,6 +120,11 @@ async function createUser(req, res) {
       return res.status(400).json(errorResponse('用户名和密码不能为空', 400));
     }
 
+    const normalizedPhone = normalizePhone(phone);
+    if (!isValidPhone(normalizedPhone)) {
+      return res.status(400).json(errorResponse('手机号必须为11位数字', 400));
+    }
+
     const db = getPool();
     const [existing] = await db.execute('SELECT id FROM users WHERE username = ?', [username]);
     if (existing.length > 0) {
@@ -121,7 +134,7 @@ async function createUser(req, res) {
     const hashedPassword = await bcrypt.hash(password, 10);
     const [result] = await db.execute(
       'INSERT INTO users (username, password, name, role, phone, project_id) VALUES (?, ?, ?, ?, ?, ?)',
-      [username, hashedPassword, name || '', role || 'worker', phone || '', project_id || null]
+      [username, hashedPassword, name || '', role || 'worker', normalizedPhone, project_id || null]
     );
 
     // 异步同步到腾讯云 IM
@@ -168,7 +181,14 @@ async function updateUser(req, res) {
 
     if (name !== undefined) { fields.push('name = ?'); params.push(name); }
     if (role !== undefined) { fields.push('role = ?'); params.push(role); }
-    if (phone !== undefined) { fields.push('phone = ?'); params.push(phone); }
+    if (phone !== undefined) {
+      const normalizedPhone = normalizePhone(phone);
+      if (!isValidPhone(normalizedPhone)) {
+        return res.status(400).json(errorResponse('手机号必须为11位数字', 400));
+      }
+      fields.push('phone = ?');
+      params.push(normalizedPhone);
+    }
     if (email !== undefined) { fields.push('email = ?'); params.push(email); }
     if (project_id !== undefined) { fields.push('project_id = ?'); params.push(project_id || null); }
     if (status !== undefined) { fields.push('status = ?'); params.push(status); }

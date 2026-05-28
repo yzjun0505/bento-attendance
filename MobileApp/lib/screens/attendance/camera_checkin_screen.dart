@@ -16,7 +16,7 @@ import '../../core/bento_typography.dart';
 import '../../models/project_model.dart';
 import '../../repositories/checkin_repository.dart';
 import '../../utils/amap_geo_service.dart';
-import '../../utils/coord_utils.dart';
+import '../../utils/app_location_service.dart';
 import '../../utils/weather_service.dart';
 import '../../utils/watermark_service.dart';
 import '../../utils/watermark_renderer.dart';
@@ -397,6 +397,7 @@ class _CameraCheckinScreenState extends State<CameraCheckinScreen> {
   int _watermarkRotationTurns = 0;
   AmapNearbyPlace? _selectedNearbyPlace;
   bool _isLoadingNearbyPlaces = false;
+  bool _isOpeningLocationPicker = false;
   List<AmapNearbyPlace> _nearbyPlaces = [];
   final Map<WatermarkFieldType, String> _fieldCustomValues = {};
 
@@ -464,32 +465,18 @@ class _CameraCheckinScreenState extends State<CameraCheckinScreen> {
 
   Future<void> _initGeo() async {
     // 第一步：尝试获取精确 GPS 定位
-    Position? pos;
-    try {
-      pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 15),
-      );
-    } catch (e) {
-      // 精确定位超时或失败，回退到设备缓存的最后已知位置
-      debugPrint('高精度定位失败: $e');
-      try {
-        pos = await Geolocator.getLastKnownPosition();
-      } catch (e) {
-        debugPrint('获取最后已知位置失败: $e');
-      }
-    }
+    final location = await AppLocationService.getCurrentLocation(
+      timeLimit: const Duration(seconds: 15),
+    );
 
-    if (pos != null && mounted) {
-      // GPS 原始坐标是 WGS84，需转为 GCJ02（高德/国测局坐标系）
-      // 否则与项目坐标（GCJ02）存在几百米偏移，导致围栏判定错误
-      final gcj = CoordUtils.wgs84ToGcj02(pos.latitude, pos.longitude);
+    if (location != null && mounted) {
       setState(() {
-        _latitude = gcj['latitude']!;
-        _longitude = gcj['longitude']!;
-        _altitude = pos!.altitude;
+        _latitude = location.latitude;
+        _longitude = location.longitude;
+        _altitude = location.altitude;
+        _currentAddress = location.address ?? _currentAddress;
       });
-      _resolveAddress(gcj['latitude']!, gcj['longitude']!);
+      _resolveAddress(location.latitude, location.longitude);
       _syncProjectFromAttendance();
     } else if (mounted) {
       // GPS 和缓存位置都失败，从 AttendanceBloc 回退
@@ -507,18 +494,18 @@ class _CameraCheckinScreenState extends State<CameraCheckinScreen> {
   /// 低精度定位回退（仅在前面的定位方式都失败时调用）
   Future<void> _retryLowAccuracyGeo() async {
     try {
-      final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.low,
+      final location = await AppLocationService.getCurrentLocation(
+        accuracy: LocationAccuracy.low,
         timeLimit: const Duration(seconds: 10),
       );
-      if (mounted) {
-        final gcj = CoordUtils.wgs84ToGcj02(pos.latitude, pos.longitude);
+      if (mounted && location != null) {
         setState(() {
-          _latitude = gcj['latitude']!;
-          _longitude = gcj['longitude']!;
-          _altitude = pos.altitude;
+          _latitude = location.latitude;
+          _longitude = location.longitude;
+          _altitude = location.altitude;
+          _currentAddress = location.address ?? _currentAddress;
         });
-        _resolveAddress(gcj['latitude']!, gcj['longitude']!);
+        _resolveAddress(location.latitude, location.longitude);
       }
     } catch (_) {
       // 最终回退失败，用户可以手动点击重试
@@ -762,7 +749,7 @@ class _CameraCheckinScreenState extends State<CameraCheckinScreen> {
       'humidity': (_humidity != '--') ? '湿度: $_humidity%' : '',
       'altitude':
           _altitude == null ? '' : '海拔: ${_altitude!.toStringAsFixed(1)}m',
-      'antiFakeCode': antiFakeCode != null ? '防伪码: $antiFakeCode' : '',
+      'antiFakeCode': antiFakeCode ?? '',
       'workContent': _fieldCustomValues[WatermarkFieldType.workContent] ??
           _fieldCustomValues[WatermarkFieldType.taskDescription] ??
           _fieldCustomValues[WatermarkFieldType.inspectionContent] ??
@@ -928,47 +915,57 @@ class _CameraCheckinScreenState extends State<CameraCheckinScreen> {
   }
 
   Future<void> _openLocationPicker() async {
-    var lat = _latitude;
-    var lng = _longitude;
+    if (_isOpeningLocationPicker) return;
 
-    // 如果还没有坐标，先尝试重新定位
-    if (lat == null || lng == null) {
-      await _retryLowAccuracyGeo();
-      lat = _latitude;
-      lng = _longitude;
-    }
+    setState(() => _isOpeningLocationPicker = true);
 
-    // 仍然没有坐标，提示用户
-    if (lat == null || lng == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('无法获取位置，请检查定位权限和GPS开关')),
-        );
+    try {
+      var lat = _latitude;
+      var lng = _longitude;
+
+      // 如果还没有坐标，先尝试重新定位
+      if (lat == null || lng == null) {
+        await _retryLowAccuracyGeo();
+        lat = _latitude;
+        lng = _longitude;
       }
-      return;
-    }
 
-    if (!mounted) return;
-    final selected = await Navigator.of(context).push<AmapNearbyPlace>(
-      MaterialPageRoute(
-        builder: (_) => _LocationPickerScreen(
-          latitude: lat!,
-          longitude: lng!,
-          currentAddress: _currentAddress,
-          selectedPlace: _selectedNearbyPlace,
-          preloadedPlaces: _nearbyPlaces,
+      // 仍然没有坐标，提示用户
+      if (lat == null || lng == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('无法获取位置，请检查定位权限和GPS开关')),
+          );
+        }
+        return;
+      }
+
+      if (!mounted) return;
+      final selected = await Navigator.of(context).push<AmapNearbyPlace>(
+        MaterialPageRoute(
+          builder: (_) => _LocationPickerScreen(
+            latitude: lat!,
+            longitude: lng!,
+            currentAddress: _currentAddress,
+            selectedPlace: _selectedNearbyPlace,
+            preloadedPlaces: _nearbyPlaces,
+          ),
         ),
-      ),
-    );
+      );
 
-    if (!mounted || selected == null) return;
-    setState(() {
-      _selectedNearbyPlace = selected;
-      _fieldCustomValues[WatermarkFieldType.addressDetail] =
-          selected.displayText;
-      _fieldCustomValues[WatermarkFieldType.projectAddress] =
-          selected.displayText;
-    });
+      if (!mounted || selected == null) return;
+      setState(() {
+        _selectedNearbyPlace = selected;
+        _fieldCustomValues[WatermarkFieldType.addressDetail] =
+            selected.displayText;
+        _fieldCustomValues[WatermarkFieldType.projectAddress] =
+            selected.displayText;
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isOpeningLocationPicker = false);
+      }
+    }
   }
 
   Future<void> _initCamera() async {

@@ -120,7 +120,7 @@ class MyApp extends StatelessWidget {
                 child: Consumer<LocaleProvider>(
                   builder: (context, localeProvider, child) {
                     return MaterialApp(
-                      title: '境图考勤',
+                      title: '境图',
                       debugShowCheckedModeBanner: false,
                       localizationsDelegates: const [
                         AtomicLocalizations.delegate,

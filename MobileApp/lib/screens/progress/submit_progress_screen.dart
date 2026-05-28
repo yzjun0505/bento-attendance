@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/bento_colors.dart';
@@ -11,8 +10,9 @@ import '../../blocs/auth/auth_bloc.dart';
 import '../../blocs/auth/auth_state.dart';
 import '../../models/task_node_model.dart';
 import '../../repositories/progress_repository.dart';
+import '../../utils/amap_geo_service.dart';
+import '../../utils/app_location_service.dart';
 import '../../utils/watermark_service.dart';
-import '../../utils/coord_utils.dart';
 
 class SubmitProgressScreen extends StatefulWidget {
   final TaskNode node;
@@ -30,6 +30,7 @@ class _SubmitProgressScreenState extends State<SubmitProgressScreen> {
   final _progressRepository = ProgressRepository();
   double _progressPercent = 50;
   final List<File> _photos = [];
+  final List<String> _watermarkCodes = [];
   bool _isSubmitting = false;
 
   @override
@@ -60,46 +61,69 @@ class _SubmitProgressScreenState extends State<SubmitProgressScreen> {
     try {
       final watermarked = await _addWatermark(File(pickedFile.path));
       if (watermarked != null && mounted) {
-        setState(() => _photos.add(watermarked));
+        setState(() {
+          _photos.add(watermarked.file);
+          _watermarkCodes.add(watermarked.code);
+        });
       }
     } catch (_) {
       // 水印失败，仍保留原图
-      if (mounted) setState(() => _photos.add(File(pickedFile.path)));
+      if (mounted) {
+        setState(() {
+          _photos.add(File(pickedFile.path));
+          _watermarkCodes.add('');
+        });
+      }
     }
   }
 
-  Future<File?> _addWatermark(File rawFile) async {
+  Future<_WatermarkedProgressPhoto?> _addWatermark(File rawFile) async {
     try {
       final authState = context.read<AuthBloc>().state;
       if (authState is! AuthAuthenticated) return null;
 
-      // 获取当前位置
+      // 获取当前位置。定位失败时不要把 0,0 写进水印，避免误认为真实地理信息。
       double lat = 0, lng = 0;
+      String? address;
       try {
-        final pos = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-          timeLimit: const Duration(seconds: 8),
+        final location = await AppLocationService.getCurrentLocation(
+          timeLimit: const Duration(seconds: 10),
         );
-        final gcj = CoordUtils.wgs84ToGcj02(pos.latitude, pos.longitude);
-        lat = gcj['latitude']!;
-        lng = gcj['longitude']!;
-      } catch (_) {}
+        if (location == null) throw Exception('定位未获取');
 
-      // 生成防伪码
-      final code = const Uuid().v4().substring(0, 16).toUpperCase();
+        lat = location.latitude;
+        lng = location.longitude;
+        address = location.address ??
+            await AmapGeoService.reverseGeocode(
+              latitude: lat,
+              longitude: lng,
+            );
+      } catch (e) {
+        debugPrint('进度水印定位失败: $e');
+      }
 
-      return await WatermarkService.addWatermark(
+      String code;
+      try {
+        code = await _progressRepository.reserveWatermarkCode();
+      } catch (e) {
+        debugPrint('进度水印防伪码预占失败，使用本地临时代码: $e');
+        code = const Uuid().v4().replaceAll('-', '').substring(0, 16).toUpperCase();
+      }
+
+      final file = await WatermarkService.addWatermark(
         imageFile: rawFile,
         userName: authState.user.name,
         projectName: widget.node.title,
         latitude: lat,
         longitude: lng,
+        address: address,
         timestamp: DateTime.now(),
         watermarkCode: code,
         customName: '进度上报',
         workContent:
             '${widget.node.title} ${_progressPercent.round()}% ${_descController.text.trim()}',
       );
+      return _WatermarkedProgressPhoto(file: file, code: code);
     } catch (_) {
       return null;
     }
@@ -142,6 +166,8 @@ class _SubmitProgressScreenState extends State<SubmitProgressScreen> {
                 ? null
                 : _blockerController.text.trim(),
             photos: photoUrls,
+            watermarkCodes:
+                _watermarkCodes.where((code) => code.trim().isNotEmpty).toList(),
           ));
     } catch (e) {
       if (mounted) {
@@ -365,8 +391,9 @@ class _SubmitProgressScreenState extends State<SubmitProgressScreen> {
                     children: [
                       Icon(Icons.check_circle, size: 16, color: colors.success),
                       const SizedBox(width: 8),
-                      Text('提交后将自动标记为「已完成」',
-                          style: TextStyle(color: colors.success, fontSize: 12)),
+                      Text('提交后将进入「待验收」',
+                          style:
+                              TextStyle(color: colors.success, fontSize: 12)),
                     ],
                   ),
                 )
@@ -384,7 +411,8 @@ class _SubmitProgressScreenState extends State<SubmitProgressScreen> {
                       Icon(Icons.play_arrow, size: 16, color: colors.primary),
                       const SizedBox(width: 8),
                       Text('提交后将自动变更为「进行中」',
-                          style: TextStyle(color: colors.primary, fontSize: 12)),
+                          style:
+                              TextStyle(color: colors.primary, fontSize: 12)),
                     ],
                   ),
                 ),
@@ -468,7 +496,12 @@ class _SubmitProgressScreenState extends State<SubmitProgressScreen> {
                             top: 4,
                             right: 4,
                             child: GestureDetector(
-                              onTap: () => setState(() => _photos.removeAt(i)),
+                              onTap: () => setState(() {
+                                _photos.removeAt(i);
+                                if (i < _watermarkCodes.length) {
+                                  _watermarkCodes.removeAt(i);
+                                }
+                              }),
                               child: Container(
                                 padding: const EdgeInsets.all(4),
                                 decoration: BoxDecoration(
@@ -566,4 +599,14 @@ class _SubmitProgressScreenState extends State<SubmitProgressScreen> {
       ),
     );
   }
+}
+
+class _WatermarkedProgressPhoto {
+  final File file;
+  final String code;
+
+  const _WatermarkedProgressPhoto({
+    required this.file,
+    required this.code,
+  });
 }

@@ -48,6 +48,20 @@ class DeleteTaskNode extends ProgressEvent {
   List<Object?> get props => [nodeId, projectId];
 }
 
+class ReviewTaskNode extends ProgressEvent {
+  final int nodeId;
+  final String action;
+  final String? remark;
+  const ReviewTaskNode({
+    required this.nodeId,
+    required this.action,
+    this.remark,
+  });
+
+  @override
+  List<Object?> get props => [nodeId, action, remark];
+}
+
 class LoadProgressReports extends ProgressEvent {
   final int nodeId;
   const LoadProgressReports({required this.nodeId});
@@ -64,6 +78,7 @@ class SubmitProgressReport extends ProgressEvent {
   final String? riskNote;
   final String? blockerNote;
   final List<String>? photos;
+  final List<String>? watermarkCodes;
   const SubmitProgressReport({
     required this.nodeId,
     this.description,
@@ -72,6 +87,7 @@ class SubmitProgressReport extends ProgressEvent {
     this.riskNote,
     this.blockerNote,
     this.photos,
+    this.watermarkCodes,
   });
 
   @override
@@ -82,7 +98,8 @@ class SubmitProgressReport extends ProgressEvent {
         progressPercent,
         riskNote,
         blockerNote,
-        photos
+        photos,
+        watermarkCodes
       ];
 }
 
@@ -197,6 +214,7 @@ class ProgressBloc extends Bloc<ProgressEvent, ProgressState> {
     on<CreateTaskNode>(_onCreateTaskNode);
     on<UpdateTaskNode>(_onUpdateTaskNode);
     on<DeleteTaskNode>(_onDeleteTaskNode);
+    on<ReviewTaskNode>(_onReviewTaskNode);
     on<LoadProgressReports>(_onLoadProgressReports);
     on<SubmitProgressReport>(_onSubmitProgressReport);
     on<LoadAuthorizedProjects>(_onLoadAuthorizedProjects);
@@ -257,6 +275,22 @@ class ProgressBloc extends Bloc<ProgressEvent, ProgressState> {
     }
   }
 
+  Future<void> _onReviewTaskNode(
+      ReviewTaskNode event, Emitter<ProgressState> emit) async {
+    emit(ProgressSubmitting());
+    try {
+      await repository.reviewNode(
+        event.nodeId,
+        action: event.action,
+        remark: event.remark,
+      );
+      emit(ProgressSubmitSuccess(
+          message: event.action == 'approve' ? '验收通过' : '已驳回继续施工'));
+    } catch (e) {
+      emit(ProgressError(message: '验收失败: ${_cleanError(e)}'));
+    }
+  }
+
   Future<void> _onLoadProgressReports(
       LoadProgressReports event, Emitter<ProgressState> emit) async {
     emit(ProgressLoading());
@@ -285,6 +319,7 @@ class ProgressBloc extends Bloc<ProgressEvent, ProgressState> {
         riskNote: event.riskNote,
         blockerNote: event.blockerNote,
         photos: event.photos,
+        watermarkCodes: event.watermarkCodes,
       );
       emit(const ProgressSubmitSuccess());
     } catch (e) {

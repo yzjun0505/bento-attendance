@@ -62,14 +62,32 @@
             <el-icon><UserFilled /></el-icon>
             <span>项目经理: {{ formatManagers(project) }}</span>
           </div>
+          <div class="project-info-item">
+            <el-icon><User /></el-icon>
+            <span>甲方用户: {{ formatClients(project) }}</span>
+          </div>
+          <div class="project-progress-summary">
+            <el-progress :percentage="project.overallProgress || 0" :stroke-width="8" />
+            <div>
+              <span>节点 {{ project.totalNodes || 0 }}</span>
+              <span>待验收 {{ project.pendingReviewNodes || 0 }}</span>
+              <span>逾期 {{ project.overdueNodes || 0 }}</span>
+            </div>
+          </div>
         </div>
 
         <div class="project-card-footer">
+          <el-button type="primary" text size="small" @click="router.push({ name: 'ProjectProgress', query: { projectId: project.id } })">
+            <el-icon><TrendCharts /></el-icon>进度
+          </el-button>
           <el-button type="primary" text size="small" @click="openDialog(project)">
             <el-icon><Edit /></el-icon>编辑
           </el-button>
           <el-button v-if="isAdmin" type="success" text size="small" @click="openAuthDialog(project)">
-            <el-icon><UserFilled /></el-icon>授权
+            <el-icon><UserFilled /></el-icon>经理授权
+          </el-button>
+          <el-button v-if="isAdmin" type="success" text size="small" @click="openClientAuthDialog(project)">
+            <el-icon><User /></el-icon>甲方授权
           </el-button>
           <el-button type="danger" text size="small" @click="handleDelete(project)">
             <el-icon><Delete /></el-icon>删除
@@ -136,6 +154,40 @@
     </el-dialog>
 
     <el-dialog
+      v-model="clientAuthDialogVisible"
+      title="甲方项目授权"
+      width="520px"
+      :close-on-click-modal="false"
+    >
+      <el-form label-width="90px">
+        <el-form-item label="项目">
+          <el-input :model-value="authorizingProject?.name || ''" disabled />
+        </el-form-item>
+        <el-form-item label="甲方用户" required>
+          <el-select
+            v-model="selectedClientIds"
+            multiple
+            filterable
+            placeholder="请选择甲方用户"
+            style="width: 100%"
+            :loading="clientAuthLoading"
+          >
+            <el-option
+              v-for="client in clientOptions"
+              :key="client.id"
+              :label="`${client.name || client.username}（${client.username}）`"
+              :value="client.id"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="clientAuthDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="clientAuthSaving" @click="handleSaveClientAuth">保存授权</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
       v-model="authDialogVisible"
       title="项目授权"
       width="520px"
@@ -175,29 +227,38 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { getProjects, createProject, updateProject, deleteProject } from '@/api/projects'
 import { getUsers } from '@/api/users'
 import { getProjectManagers, bindProjectManager, unbindProjectManager } from '@/api/projectManagers'
+import { getProjectClients, bindProjectClient, unbindProjectClient } from '@/api/projectClients'
 import { useUserStore } from '@/store/user'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Search, OfficeBuilding, Location, Aim, User, UserFilled, Edit, Delete } from '@element-plus/icons-vue'
+import { Plus, Search, OfficeBuilding, Location, Aim, User, UserFilled, Edit, Delete, TrendCharts } from '@element-plus/icons-vue'
 import AmapSelector from '@/components/AmapSelector.vue'
 
 const loading = ref(false)
 const saving = ref(false)
 const authLoading = ref(false)
 const authSaving = ref(false)
+const clientAuthLoading = ref(false)
+const clientAuthSaving = ref(false)
 const tableData = ref([])
 const dialogVisible = ref(false)
 const authDialogVisible = ref(false)
+const clientAuthDialogVisible = ref(false)
 const editingProject = ref(null)
 const authorizingProject = ref(null)
 const dialogFormRef = ref(null)
 const managerOptions = ref([])
+const clientOptions = ref([])
 const authRows = ref([])
 const selectedManagerIds = ref([])
+const clientAuthRows = ref([])
+const selectedClientIds = ref([])
 const userStore = useUserStore()
 const isAdmin = computed(() => userStore.userInfo?.role === 'admin')
+const router = useRouter()
 
 const filters = reactive({ keyword: '', status: '' })
 const pagination = reactive({ page: 1, pageSize: 20, total: 0 })
@@ -229,6 +290,13 @@ onMounted(() => loadData())
 function formatManagers(project) {
   if (project.managers?.length) {
     return project.managers.map((manager) => manager.name || manager.username).join('、')
+  }
+  return '未授权'
+}
+
+function formatClients(project) {
+  if (project.clients?.length) {
+    return project.clients.map((client) => client.name || client.username).join('、')
   }
   return '未授权'
 }
@@ -294,6 +362,11 @@ async function loadManagerOptions() {
   managerOptions.value = res.data.list || []
 }
 
+async function loadClientOptions() {
+  const res = await getUsers({ role: 'client', status: 1, page: 1, pageSize: 1000 })
+  clientOptions.value = res.data.list || []
+}
+
 async function openAuthDialog(project) {
   authorizingProject.value = project
   authDialogVisible.value = true
@@ -340,6 +413,51 @@ async function handleSaveAuth() {
     ElMessage.error(e.response?.data?.message || e.message || '保存授权失败')
   } finally {
     authSaving.value = false
+  }
+}
+
+async function openClientAuthDialog(project) {
+  authorizingProject.value = project
+  clientAuthDialogVisible.value = true
+  clientAuthLoading.value = true
+  try {
+    if (clientOptions.value.length === 0) {
+      await loadClientOptions()
+    }
+    const res = await getProjectClients({ project_id: project.id })
+    clientAuthRows.value = res.data || []
+    selectedClientIds.value = clientAuthRows.value.map((item) => item.client_id)
+  } catch (e) {
+    ElMessage.error(e.response?.data?.message || '加载甲方授权信息失败')
+  } finally {
+    clientAuthLoading.value = false
+  }
+}
+
+async function handleSaveClientAuth() {
+  if (!authorizingProject.value) return
+
+  const currentIds = new Set(clientAuthRows.value.map((item) => item.client_id))
+  const nextIds = new Set(selectedClientIds.value)
+  const additions = selectedClientIds.value.filter((id) => !currentIds.has(id))
+  const removals = clientAuthRows.value.filter((item) => !nextIds.has(item.client_id))
+
+  clientAuthSaving.value = true
+  try {
+    await Promise.all([
+      ...additions.map((clientId) => bindProjectClient({
+        client_id: clientId,
+        project_id: authorizingProject.value.id
+      })),
+      ...removals.map((item) => unbindProjectClient(item.id))
+    ])
+    ElMessage.success('甲方授权已更新')
+    clientAuthDialogVisible.value = false
+    await loadData()
+  } catch (e) {
+    ElMessage.error(e.response?.data?.message || e.message || '保存甲方授权失败')
+  } finally {
+    clientAuthSaving.value = false
   }
 }
 </script>
@@ -404,6 +522,18 @@ async function handleSaveAuth() {
   gap: 8px;
   font-size: 13px;
   color: var(--text-secondary);
+}
+
+.project-progress-summary {
+  margin-top: 8px;
+}
+
+.project-progress-summary > div {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .project-card-footer {

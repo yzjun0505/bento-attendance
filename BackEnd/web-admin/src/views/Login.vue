@@ -10,10 +10,10 @@
     <div class="login-card fade-in-up">
       <div class="login-header">
         <div class="login-logo">
-          <el-icon :size="36" color="#4f8cff"><Odometer /></el-icon>
+          <img :src="logoUrl" alt="境图项目协同管理平台" />
         </div>
-        <h1 class="login-title">打卡管理系统</h1>
-        <p class="login-subtitle">多端协同 · 实时位置 · 智能管理</p>
+        <h1 class="login-title">境图项目协同管理平台</h1>
+        <p class="login-subtitle">项目进度 · 现场协同 · 智能管理</p>
       </div>
 
       <el-form
@@ -67,6 +67,7 @@ import { useRouter } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import { User, Lock } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import logoUrl from '@/assets/jingmap-logo.png'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -89,7 +90,12 @@ async function handleLogin() {
 
   loading.value = true
   try {
-    await userStore.login(form.username, form.password)
+    const res = await userStore.login(form.username, form.password)
+    if (res.data?.user?.role === 'client') {
+      userStore.logout()
+      ElMessage.warning('甲方用户请使用手机端查看项目进度')
+      return
+    }
     ElMessage.success('登录成功')
     router.push('/dashboard')
   } catch (e) {
@@ -177,11 +183,18 @@ async function handleLogin() {
   width: 64px;
   height: 64px;
   border-radius: 16px;
-  background: rgba(79, 140, 255, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 auto 16px;
+  overflow: hidden;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+}
+
+.login-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .login-title {

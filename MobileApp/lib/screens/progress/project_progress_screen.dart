@@ -3,10 +3,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/bento_colors.dart';
 import '../../core/bento_typography.dart';
 import '../../blocs/progress/progress_bloc.dart';
+import '../../blocs/auth/auth_bloc.dart';
+import '../../blocs/auth/auth_state.dart';
 import '../../models/project_progress_model.dart';
 import '../../models/task_node_model.dart';
 import '../../widgets/bento_card.dart';
 import '../../widgets/bento_loading.dart';
+import 'node_detail_screen.dart';
+import 'submit_progress_screen.dart';
 
 class ProjectProgressScreen extends StatefulWidget {
   final int projectId;
@@ -27,6 +31,17 @@ class _ProjectProgressScreenState extends State<ProjectProgressScreen> {
   List<TaskNode>? _nodes;
   bool _isLoading = true;
   String? _error;
+
+  bool get _canManageProgress {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is! AuthAuthenticated) return false;
+    return authState.user.role == 'admin' || authState.user.role == 'manager';
+  }
+
+  bool get _isClient {
+    final authState = context.read<AuthBloc>().state;
+    return authState is AuthAuthenticated && authState.user.role == 'client';
+  }
 
   @override
   void initState() {
@@ -57,6 +72,8 @@ class _ProjectProgressScreenState extends State<ProjectProgressScreen> {
         return colors.textTertiary;
       case 'in_progress':
         return colors.primary;
+      case 'pending_review':
+        return colors.warning;
       case 'completed':
         return colors.success;
       case 'paused':
@@ -72,6 +89,8 @@ class _ProjectProgressScreenState extends State<ProjectProgressScreen> {
         return colors.surfaceVariant;
       case 'in_progress':
         return colors.primaryLight;
+      case 'pending_review':
+        return colors.warningLight;
       case 'completed':
         return colors.successLight;
       case 'paused':
@@ -114,23 +133,25 @@ class _ProjectProgressScreenState extends State<ProjectProgressScreen> {
         },
         child: _buildBody(),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final created = await Navigator.pushNamed(
-            context,
-            '/create_node',
-            arguments: {
-              'projectId': widget.projectId,
-              'projectName': widget.projectName,
-            },
-          );
-          if (created == true && mounted) {
-            _loadData();
-          }
-        },
-        backgroundColor: colors.primary,
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: _canManageProgress
+          ? FloatingActionButton(
+              onPressed: () async {
+                final created = await Navigator.pushNamed(
+                  context,
+                  '/create_node',
+                  arguments: {
+                    'projectId': widget.projectId,
+                    'projectName': widget.projectName,
+                  },
+                );
+                if (created == true && mounted) {
+                  _loadData();
+                }
+              },
+              backgroundColor: colors.primary,
+              child: const Icon(Icons.add),
+            )
+          : null,
     );
   }
 
@@ -293,6 +314,12 @@ class _ProjectProgressScreenState extends State<ProjectProgressScreen> {
                         value: '${summary.inProgressNodes}',
                         color: colors.primary,
                         bgColor: colors.primaryLight,
+                      ),
+                      _buildStatChip(
+                        label: '待验收',
+                        value: '${summary.pendingReviewNodes}',
+                        color: colors.warning,
+                        bgColor: colors.warningLight,
                       ),
                       _buildStatChip(
                         label: '逾期',
@@ -605,6 +632,18 @@ class _ProjectProgressScreenState extends State<ProjectProgressScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: BentoSpacing.space8),
       child: BentoCard.filled(
+        onTap: () async {
+          final changed = await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => BlocProvider.value(
+                value: context.read<ProgressBloc>(),
+                child: NodeDetailScreen(node: node),
+              ),
+            ),
+          );
+          if (changed == true && mounted) _loadData();
+        },
         customBgColor: colors.surfaceVariant,
         padding: const EdgeInsets.all(BentoSpacing.space12),
         borderRadius: BentoRadius.sm,
@@ -722,10 +761,106 @@ class _ProjectProgressScreenState extends State<ProjectProgressScreen> {
                 ],
               ],
             ),
+            const SizedBox(height: BentoSpacing.space8),
+            Row(
+              children: [
+                if (!_canManageProgress && !_isClient)
+                  _buildMiniAction(
+                    colors,
+                    label: '上报',
+                    icon: Icons.upload,
+                    color: colors.primary,
+                    onTap: () => _openSubmit(node),
+                  )
+                else ...[
+                  _buildMiniAction(
+                    colors,
+                    label: '详情',
+                    icon: Icons.info_outline,
+                    color: colors.primary,
+                    onTap: () async {
+                      final changed = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => BlocProvider.value(
+                            value: context.read<ProgressBloc>(),
+                            child: NodeDetailScreen(node: node),
+                          ),
+                        ),
+                      );
+                      if (changed == true && mounted) _loadData();
+                    },
+                  ),
+                  if (_canManageProgress &&
+                      node.status == 'pending_review') ...[
+                    const SizedBox(width: 8),
+                    _buildMiniAction(
+                      colors,
+                      label: '验收',
+                      icon: Icons.verified_outlined,
+                      color: colors.success,
+                      onTap: () => _reviewNode(node, 'approve'),
+                    ),
+                  ],
+                ],
+              ],
+            ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildMiniAction(
+    BentoColors colors, {
+    required String label,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(BentoRadius.sm),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(BentoRadius.sm),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 4),
+            Text(label,
+                style: TextStyle(
+                    color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openSubmit(TaskNode node) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BlocProvider.value(
+          value: context.read<ProgressBloc>(),
+          child: SubmitProgressScreen(node: node),
+        ),
+      ),
+    );
+    if (result == true && mounted) _loadData();
+  }
+
+  void _reviewNode(TaskNode node, String action) {
+    context
+        .read<ProgressBloc>()
+        .add(ReviewTaskNode(nodeId: node.id, action: action));
+    Future.delayed(const Duration(milliseconds: 400), () {
+      if (mounted) _loadData();
+    });
   }
 
   Widget _buildRecentActivity() {

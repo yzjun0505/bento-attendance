@@ -112,11 +112,16 @@ TIM_SDK_APP_ID=腾讯云IM的SDKAppID
 TIM_SECRET_KEY=腾讯云IM的SecretKey
 TIM_ADMIN_USERID=administrator
 
-APP_ANDROID_VERSION_NAME=1.0.9
-APP_ANDROID_VERSION_CODE=10
+AI_API_KEY=你的DeepSeek API Key
+AI_BASE_URL=https://api.deepseek.com/v1
+AI_MODEL=deepseek-v4-flash
+AI_TIMEOUT_MS=30000
+
+APP_ANDROID_VERSION_NAME=1.0.10
+APP_ANDROID_VERSION_CODE=19
 APP_ANDROID_MIN_VERSION_CODE=1
 APP_ANDROID_FORCE_UPDATE=false
-APP_ANDROID_DOWNLOAD_URL=http://150.158.79.174/uploads/releases/app-v1.0.9-9.apk
+APP_ANDROID_DOWNLOAD_URL=http://150.158.79.174/uploads/releases/app-v1.0.10-19.apk
 APP_ANDROID_RELEASE_NOTES=本次更新说明
 ```
 
@@ -210,13 +215,13 @@ build/app/outputs/flutter-apk/app-release.apk
 ```bash
 cd /Users/eva/Desktop/Project/MobileApp
 scp build/app/outputs/flutter-apk/app-release.apk \
-  ubuntu@150.158.79.174:/opt/bento-attendance/uploads/releases/app-v1.0.9-9.apk
+  ubuntu@150.158.79.174:/opt/bento-attendance/uploads/releases/app-v1.0.10-19.apk
 ```
 
 验证下载：
 
 ```bash
-curl -I http://150.158.79.174/uploads/releases/app-v1.0.9-9.apk
+curl -I http://150.158.79.174/uploads/releases/app-v1.0.10-19.apk
 ```
 
 如果版本号变更，要同步修改：
@@ -250,4 +255,3 @@ App 不能保存腾讯云 IM `SecretKey`。正确做法是：App 登录业务后
 ### 只上传 APK，需要重启 Docker 吗？
 
 通常不需要。APK 放在 `/opt/bento-attendance/uploads/releases/`，由 `bento_nginx` 直接提供下载。只有版本接口 `.env` 改了，才需要重启 `bento_app`。
-

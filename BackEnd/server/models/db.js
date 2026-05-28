@@ -93,7 +93,7 @@ async function initDatabase() {
       username VARCHAR(50) UNIQUE NOT NULL,
       password VARCHAR(255) NOT NULL,
       name VARCHAR(100) NOT NULL DEFAULT '',
-      role ENUM('admin', 'manager', 'worker') NOT NULL DEFAULT 'worker',
+      role ENUM('admin', 'manager', 'worker', 'client') NOT NULL DEFAULT 'worker',
       phone VARCHAR(20) DEFAULT '',
       project_id INT DEFAULT NULL,
       avatar VARCHAR(500) DEFAULT '',
@@ -115,6 +115,20 @@ async function initDatabase() {
     } else {
       logger.error('迁移 users 表 email 字段失败', { error: e.message });
     }
+  }
+
+  // 迁移：扩展 users.role，支持甲方用户
+  try {
+    const [roleColumns] = await db.execute("SHOW COLUMNS FROM users LIKE 'role'");
+    const roleType = roleColumns[0]?.Type || '';
+    if (!roleType.includes("'client'")) {
+      await db.execute(
+        "ALTER TABLE users MODIFY COLUMN role ENUM('admin','manager','worker','client') NOT NULL DEFAULT 'worker'"
+      );
+      logger.info('已迁移 users 表：扩展 role 支持 client');
+    }
+  } catch (e) {
+    logger.error('迁移 users 表 role 字段失败', { error: e.message });
   }
 
   // 创建项目表
@@ -142,6 +156,19 @@ async function initDatabase() {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       UNIQUE KEY unique_manager_project (manager_id, project_id),
       FOREIGN KEY (manager_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  // 创建项目-甲方用户授权关系表
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS project_clients (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      client_id INT NOT NULL,
+      project_id INT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY unique_client_project (client_id, project_id),
+      FOREIGN KEY (client_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
@@ -703,14 +730,32 @@ async function initDatabase() {
       description TEXT,
       planned_date DATE,
       assignee_id INT,
-      status ENUM('pending','in_progress','completed','paused') DEFAULT 'pending',
+      status ENUM('pending','in_progress','pending_review','completed','paused') DEFAULT 'pending',
       progress_percent INT DEFAULT 0,
+      review_note TEXT,
+      reviewed_by INT DEFAULT NULL,
+      reviewed_at DATETIME DEFAULT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-      FOREIGN KEY (assignee_id) REFERENCES users(id) ON DELETE SET NULL
+      FOREIGN KEY (assignee_id) REFERENCES users(id) ON DELETE SET NULL,
+      FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
+
+  // 迁移：扩展 task_nodes.status，支持 100% 后待验收
+  try {
+    const [statusColumns] = await db.execute("SHOW COLUMNS FROM task_nodes LIKE 'status'");
+    const statusType = statusColumns[0]?.Type || '';
+    if (!statusType.includes('pending_review')) {
+      await db.execute(
+        "ALTER TABLE task_nodes MODIFY COLUMN status ENUM('pending','in_progress','pending_review','completed','paused') DEFAULT 'pending'"
+      );
+      logger.info('已迁移 task_nodes 表：扩展 status 待验收状态');
+    }
+  } catch (e) {
+    logger.error('迁移 task_nodes 表 status 字段失败', { error: e.message });
+  }
 
   // 迁移：为 task_nodes 添加增强字段
   const taskNodeMigrations = [
@@ -719,6 +764,9 @@ async function initDatabase() {
     { col: 'plan_end_date', sql: 'ALTER TABLE task_nodes ADD COLUMN plan_end_date DATE' },
     { col: 'priority', sql: "ALTER TABLE task_nodes ADD COLUMN priority ENUM('low','medium','high','urgent') DEFAULT 'medium'" },
     { col: 'sort_order', sql: 'ALTER TABLE task_nodes ADD COLUMN sort_order INT DEFAULT 0' },
+    { col: 'review_note', sql: 'ALTER TABLE task_nodes ADD COLUMN review_note TEXT' },
+    { col: 'reviewed_by', sql: 'ALTER TABLE task_nodes ADD COLUMN reviewed_by INT DEFAULT NULL' },
+    { col: 'reviewed_at', sql: 'ALTER TABLE task_nodes ADD COLUMN reviewed_at DATETIME DEFAULT NULL' },
   ];
   for (const m of taskNodeMigrations) {
     try {
@@ -751,6 +799,7 @@ async function initDatabase() {
     { col: 'risk_note', sql: 'ALTER TABLE progress_reports ADD COLUMN risk_note TEXT' },
     { col: 'blocker_note', sql: 'ALTER TABLE progress_reports ADD COLUMN blocker_note TEXT' },
     { col: 'photos', sql: 'ALTER TABLE progress_reports ADD COLUMN photos JSON' },
+    { col: 'watermark_codes', sql: 'ALTER TABLE progress_reports ADD COLUMN watermark_codes JSON' },
   ];
   for (const m of reportMigrations) {
     try {

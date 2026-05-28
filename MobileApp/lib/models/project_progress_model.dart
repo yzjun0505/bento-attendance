@@ -8,6 +8,7 @@ class ProjectProgress {
   final int totalNodes;
   final int completedNodes;
   final int inProgressNodes;
+  final int pendingReviewNodes;
   final int overdueNodes;
   final int pausedNodes;
   final String? lastReportTime;
@@ -21,6 +22,7 @@ class ProjectProgress {
     required this.totalNodes,
     required this.completedNodes,
     required this.inProgressNodes,
+    required this.pendingReviewNodes,
     required this.overdueNodes,
     required this.pausedNodes,
     this.lastReportTime,
@@ -28,19 +30,21 @@ class ProjectProgress {
   });
 
   factory ProjectProgress.fromJson(Map<String, dynamic> json) {
-    int _int(dynamic v) => v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
+    int asInt(dynamic v) =>
+        v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
     return ProjectProgress(
-      id: _int(json['id']),
+      id: asInt(json['id']),
       name: json['name'] ?? '',
       address: json['address'],
-      overallProgress: _int(json['overallProgress']),
-      totalNodes: _int(json['totalNodes']),
-      completedNodes: _int(json['completedNodes']),
-      inProgressNodes: _int(json['inProgressNodes']),
-      overdueNodes: _int(json['overdueNodes']),
-      pausedNodes: _int(json['pausedNodes']),
+      overallProgress: asInt(json['overallProgress']),
+      totalNodes: asInt(json['totalNodes']),
+      completedNodes: asInt(json['completedNodes']),
+      inProgressNodes: asInt(json['inProgressNodes']),
+      pendingReviewNodes: asInt(json['pendingReviewNodes']),
+      overdueNodes: asInt(json['overdueNodes']),
+      pausedNodes: asInt(json['pausedNodes']),
       lastReportTime: json['lastReportTime'],
-      assigneeCount: _int(json['assigneeCount']),
+      assigneeCount: asInt(json['assigneeCount']),
     );
   }
 }
@@ -52,6 +56,7 @@ class ProjectProgressSummary {
   final int totalNodes;
   final int completedNodes;
   final int inProgressNodes;
+  final int pendingReviewNodes;
   final int overdueNodes;
   final int pausedNodes;
   final List<PhaseStat> phases;
@@ -64,6 +69,7 @@ class ProjectProgressSummary {
     required this.totalNodes,
     required this.completedNodes,
     required this.inProgressNodes,
+    required this.pendingReviewNodes,
     required this.overdueNodes,
     required this.pausedNodes,
     required this.phases,
@@ -71,16 +77,18 @@ class ProjectProgressSummary {
   });
 
   factory ProjectProgressSummary.fromJson(Map<String, dynamic> json) {
-    int _int(dynamic v) => v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
+    int asInt(dynamic v) =>
+        v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
     return ProjectProgressSummary(
-      projectId: _int(json['projectId']),
+      projectId: asInt(json['projectId']),
       projectName: json['projectName'] ?? '',
-      overallProgress: _int(json['overallProgress']),
-      totalNodes: _int(json['totalNodes']),
-      completedNodes: _int(json['completedNodes']),
-      inProgressNodes: _int(json['inProgressNodes']),
-      overdueNodes: _int(json['overdueNodes']),
-      pausedNodes: _int(json['pausedNodes']),
+      overallProgress: asInt(json['overallProgress']),
+      totalNodes: asInt(json['totalNodes']),
+      completedNodes: asInt(json['completedNodes']),
+      inProgressNodes: asInt(json['inProgressNodes']),
+      pendingReviewNodes: asInt(json['pendingReviewNodes']),
+      overdueNodes: asInt(json['overdueNodes']),
+      pausedNodes: asInt(json['pausedNodes']),
       phases: json['phases'] != null
           ? (json['phases'] as List)
               .map((e) => PhaseStat.fromJson(e as Map<String, dynamic>))
@@ -111,13 +119,14 @@ class PhaseStat {
   });
 
   factory PhaseStat.fromJson(Map<String, dynamic> json) {
-    int _int(dynamic v) => v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
+    int asInt(dynamic v) =>
+        v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
     return PhaseStat(
       phase: json['phase'] ?? '',
       label: json['label'] ?? '',
-      nodeCount: _int(json['nodeCount']),
-      completedCount: _int(json['completedCount']),
-      completionRate: _int(json['completionRate']),
+      nodeCount: asInt(json['nodeCount']),
+      completedCount: asInt(json['completedCount']),
+      completionRate: asInt(json['completionRate']),
     );
   }
 }
@@ -150,12 +159,13 @@ class RecentReport {
   });
 
   factory RecentReport.fromJson(Map<String, dynamic> json) {
-    int _int(dynamic v) => v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
+    int asInt(dynamic v) =>
+        v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
     return RecentReport(
-      id: _int(json['id']),
-      nodeId: _int(json['nodeId']),
+      id: asInt(json['id']),
+      nodeId: asInt(json['nodeId']),
       description: json['description'],
-      progressPercent: _int(json['progressPercent']),
+      progressPercent: asInt(json['progressPercent']),
       riskNote: json['riskNote'],
       blockerNote: json['blockerNote'],
       reporterName: json['reporterName'],

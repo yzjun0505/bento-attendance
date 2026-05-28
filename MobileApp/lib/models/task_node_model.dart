@@ -16,6 +16,8 @@ class TaskNode {
   final String? planStartDate;
   final String? planEndDate;
   final String? priority;
+  final String? reviewNote;
+  final String? reviewerName;
   final int sortOrder;
 
   TaskNode({
@@ -34,28 +36,34 @@ class TaskNode {
     this.planStartDate,
     this.planEndDate,
     this.priority,
+    this.reviewNote,
+    this.reviewerName,
     this.sortOrder = 0,
   });
 
   factory TaskNode.fromJson(Map<String, dynamic> json) {
-    int _int(dynamic v) => v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
+    int asInt(dynamic v) =>
+        v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
     return TaskNode(
-      id: _int(json['id']),
-      projectId: _int(json['project_id']),
+      id: asInt(json['id']),
+      projectId: asInt(json['project_id']),
       title: json['title'] ?? '',
       description: json['description'],
       plannedDate: json['planned_date'],
-      assigneeId: json['assignee_id'] != null ? _int(json['assignee_id']) : null,
+      assigneeId:
+          json['assignee_id'] != null ? asInt(json['assignee_id']) : null,
       assigneeName: json['assignee_name'],
       status: json['status'] ?? 'pending',
-      progressPercent: _int(json['progress_percent']),
+      progressPercent: asInt(json['progress_percent']),
       createdAt: json['created_at'] ?? '',
       updatedAt: json['updated_at'] ?? '',
       phase: json['phase'],
       planStartDate: json['plan_start_date'],
       planEndDate: json['plan_end_date'],
       priority: json['priority'],
-      sortOrder: _int(json['sort_order']),
+      reviewNote: json['review_note'],
+      reviewerName: json['reviewer_name'],
+      sortOrder: asInt(json['sort_order']),
     );
   }
 
@@ -71,6 +79,7 @@ class TaskNode {
       'plan_start_date': planStartDate,
       'plan_end_date': planEndDate,
       'priority': priority,
+      'review_note': reviewNote,
       'sort_order': sortOrder,
     };
   }
@@ -81,6 +90,8 @@ class TaskNode {
         return '待开始';
       case 'in_progress':
         return '进行中';
+      case 'pending_review':
+        return '待验收';
       case 'completed':
         return '已完成';
       case 'paused':

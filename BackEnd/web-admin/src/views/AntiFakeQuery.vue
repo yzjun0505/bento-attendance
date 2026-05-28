@@ -4,7 +4,7 @@
       <div class="header-section">
         <div>
           <h2 class="page-title">防伪码查询</h2>
-          <p class="page-subtitle">验证照片真伪，查询防伪码对应的打卡记录</p>
+          <p class="page-subtitle">验证照片真伪，查询防伪码对应的业务记录</p>
         </div>
       </div>
 
@@ -44,7 +44,7 @@
       </div>
 
       <div class="result-section" v-if="hasSearched">
-        <el-empty v-if="!result" description="未找到该防伪码对应的打卡记录，请确认防伪码是否正确" />
+        <el-empty v-if="!result" description="未找到该防伪码对应的打卡或进度上报记录，请确认防伪码是否正确" />
 
         <div v-else class="result-card">
           <div class="result-status" :class="statusClass">
@@ -81,7 +81,7 @@
             <div class="info-section">
               <div class="info-grid">
                 <div class="info-item">
-                  <div class="info-label">打卡人</div>
+                  <div class="info-label">人员</div>
                   <div class="info-value">
                     <el-avatar :size="24" style="background: var(--gradient-green); font-size: 12px; margin-right: 8px;">
                       {{ result.user_name ? result.user_name.charAt(0) : '—' }}
@@ -90,11 +90,11 @@
                   </div>
                 </div>
                 <div class="info-item">
-                  <div class="info-label">打卡时间</div>
+                  <div class="info-label">记录时间</div>
                   <div class="info-value">{{ formatTime(result.created_at) }}</div>
                 </div>
                 <div class="info-item">
-                  <div class="info-label">打卡类型</div>
+                  <div class="info-label">业务类型</div>
                   <div class="info-value">
                     <el-tag :type="getTypeTagColor(result.type)" size="small" round effect="dark">
                       {{ getTypeName(result.type) }}
@@ -105,7 +105,7 @@
                   <div class="info-label">所属项目</div>
                   <div class="info-value">{{ result.project_name || '—' }}</div>
                 </div>
-                <div class="info-item full-width">
+                <div v-if="result.address" class="info-item full-width">
                   <div class="info-label">打卡地点</div>
                   <div class="info-value">
                     <el-icon><Location /></el-icon> {{ result.address || '—' }}
@@ -113,7 +113,7 @@
                 </div>
                 <div class="info-item">
                   <div class="info-label">防伪码</div>
-                  <div class="info-value code-value">{{ result.anti_fake_code || searchCode }}</div>
+                  <div class="info-value code-value">{{ result.watermark_code || result.anti_fake_code || searchCode }}</div>
                 </div>
               </div>
             </div>
@@ -159,6 +159,7 @@ const TYPE_NAME_MAP = {
   'safety': '安全检查',
   'device': '设备位置',
   'custom': '自定义',
+  'progress_report': '项目进度上报',
 }
 
 function getTypeName(type) {

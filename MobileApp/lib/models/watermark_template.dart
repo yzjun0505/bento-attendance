@@ -369,7 +369,9 @@ class WatermarkTemplate {
   }
 
   static WatermarkFieldType labelToFieldType(String label) {
-    if (label.contains('施工') || label.contains('工作') || label.contains('进度')) {
+    if (label.contains('防伪') || label.toLowerCase().contains('anti')) {
+      return WatermarkFieldType.antiFakeCode;
+    } else if (label.contains('施工') || label.contains('工作') || label.contains('进度')) {
       return WatermarkFieldType.workContent;
     } else if (label.contains('打卡')) {
       return WatermarkFieldType.userName;

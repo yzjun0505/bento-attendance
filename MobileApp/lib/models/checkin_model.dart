@@ -153,16 +153,21 @@ class Checkin {
       type == 'out' ||
       type == 'clock_out';
 
+  String? get _effectiveStatus => attendanceStatus ?? rawStatus;
+
   String? get statusText {
-    switch (rawStatus) {
+    switch (_effectiveStatus) {
       case 'late':
+        if (type == 'out' || type == 'clock_out') return null;
         return '迟到';
       case 'early':
+      case 'early_leave':
+        if (type == 'in' || type == 'clock_in') return null;
         return '早退';
       default:
         return null;
     }
   }
 
-  bool get isAbnormal => rawStatus == 'late' || rawStatus == 'early';
+  bool get isAbnormal => statusText != null;
 }

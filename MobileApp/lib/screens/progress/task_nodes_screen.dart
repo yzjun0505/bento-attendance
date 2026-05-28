@@ -3,6 +3,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/bento_colors.dart';
 import '../../core/bento_typography.dart';
 import '../../blocs/progress/progress_bloc.dart';
+import '../../blocs/auth/auth_bloc.dart';
+import '../../blocs/auth/auth_state.dart';
 import '../../models/task_node_model.dart';
 import '../../widgets/bento_card.dart';
 import '../../widgets/bento_empty_state.dart';
@@ -25,6 +27,11 @@ class TaskNodesScreen extends StatefulWidget {
 }
 
 class _TaskNodesScreenState extends State<TaskNodesScreen> {
+  bool get _isClient {
+    final authState = context.read<AuthBloc>().state;
+    return authState is AuthAuthenticated && authState.user.role == 'client';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -128,11 +135,13 @@ class _TaskNodesScreenState extends State<TaskNodesScreen> {
           return const SizedBox.shrink();
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showCreateDialog(context, colors),
-        backgroundColor: colors.primary,
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: _isClient
+          ? null
+          : FloatingActionButton(
+              onPressed: () => _showCreateDialog(context, colors),
+              backgroundColor: colors.primary,
+              child: const Icon(Icons.add),
+            ),
     );
   }
 
@@ -256,44 +265,47 @@ class _TaskNodesScreenState extends State<TaskNodesScreen> {
                   ),
                 ],
                 const Spacer(),
-                InkWell(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => BlocProvider.value(
-                          value: context.read<ProgressBloc>(),
-                          child: SubmitProgressScreen(node: node),
+                if (!_isClient)
+                  InkWell(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => BlocProvider.value(
+                            value: context.read<ProgressBloc>(),
+                            child: SubmitProgressScreen(node: node),
+                          ),
                         ),
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: BentoSpacing.space10,
+                        vertical: BentoSpacing.space4,
                       ),
-                    );
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: BentoSpacing.space10,
-                      vertical: BentoSpacing.space4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: colors.primaryLight,
-                      borderRadius: BorderRadius.circular(BentoRadius.sm),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.upload, size: 14, color: colors.primary),
-                        const SizedBox(width: 4),
-                        Text(
-                          '上报',
-                          style:
-                              Theme.of(context).textTheme.labelSmall?.copyWith(
-                                    color: colors.primary,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                        ),
-                      ],
+                      decoration: BoxDecoration(
+                        color: colors.primaryLight,
+                        borderRadius: BorderRadius.circular(BentoRadius.sm),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.upload, size: 14, color: colors.primary),
+                          const SizedBox(width: 4),
+                          Text(
+                            '上报',
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall
+                                ?.copyWith(
+                                  color: colors.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
           ],

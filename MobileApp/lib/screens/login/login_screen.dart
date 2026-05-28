@@ -6,7 +6,6 @@ import '../../blocs/auth/auth_state.dart';
 import '../../core/bento_colors.dart';
 import '../../core/bento_typography.dart';
 import '../../widgets/bento_widgets.dart';
-import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -41,14 +40,26 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _openRegister() async {
-    final username = await Navigator.push<String>(
-      context,
-      MaterialPageRoute(builder: (_) => const RegisterScreen()),
+    final colors = context.colors;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: colors.surface,
+          title: Text('新用户注册', style: TextStyle(color: colors.textPrimary)),
+          content: Text(
+            '新账号暂不开放自助注册，请联系管理员开通账号。',
+            style: TextStyle(color: colors.textSecondary, height: 1.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('知道了'),
+            ),
+          ],
+        );
+      },
     );
-    if (username != null && username.isNotEmpty && mounted) {
-      _usernameController.text = username;
-      _showMessage('注册成功，请输入密码登录');
-    }
   }
 
   void _showMessage(String message) {
@@ -122,7 +133,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         const SizedBox(height: BentoSpacing.space20),
         Text(
-          '境图考勤',
+          '境图',
           style: theme.textTheme.headlineMedium?.copyWith(
             color: colors.textPrimary,
             fontWeight: FontWeight.w800,
@@ -131,7 +142,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         const SizedBox(height: BentoSpacing.space8),
         Text(
-          '定位打卡、现场记录与团队协同',
+          '项目进度、现场记录与团队协同',
           style: theme.textTheme.bodyMedium?.copyWith(
             color: colors.textSecondary,
             height: 1.4,

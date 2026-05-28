@@ -14,5 +14,6 @@ router.put('/nodes/:id', taskNodeController.updateNode);
 router.delete('/nodes/:id', taskNodeController.deleteNode);
 router.get('/nodes/:id/reports', taskNodeController.getReportsByNode);
 router.post('/nodes/:id/reports', taskNodeController.createReport);
+router.post('/nodes/:id/review', taskNodeController.reviewNode);
 
 module.exports = router;

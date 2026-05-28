@@ -191,8 +191,11 @@ class WatermarkService {
     final dateStr = DateFormat('yyyy-MM-dd').format(timestamp);
     final timeOnlyStr = DateFormat('HH:mm:ss').format(timestamp);
     final weekdayStr = _getWeekdayStr(timestamp);
+    final hasLocation = latitude.abs() > 0.000001 || longitude.abs() > 0.000001;
     final locStr = address ??
-        '${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}';
+        (hasLocation
+            ? '${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}'
+            : '定位未获取');
 
     final data = watermarkData ??
         <String, String>{
@@ -202,8 +205,8 @@ class WatermarkService {
           'projectName': projectName,
           'addressDetail': locStr,
           'userName': userName,
-          'gpsLat': '纬度: ${latitude.toStringAsFixed(6)}',
-          'gpsLng': '经度: ${longitude.toStringAsFixed(6)}',
+          'gpsLat': hasLocation ? '纬度: ${latitude.toStringAsFixed(6)}' : '',
+          'gpsLng': hasLocation ? '经度: ${longitude.toStringAsFixed(6)}' : '',
           'weather': weather,
           'temperature': (temperature != null && temperature != '--')
               ? '温度: $temperature℃'
@@ -212,7 +215,7 @@ class WatermarkService {
               (humidity != null && humidity != '--') ? '湿度: $humidity%' : '',
           'altitude':
               altitude != null ? '海拔: ${altitude.toStringAsFixed(1)}m' : '',
-          'antiFakeCode': '防伪码: $watermarkCode',
+          'antiFakeCode': watermarkCode,
           'homeowner': homeowner ?? '',
           'contractorOrg': contractorOrg ?? '',
           'teamLeader': teamLeader ?? '',
@@ -230,7 +233,7 @@ class WatermarkService {
         };
 
     if (!data.containsKey('antiFakeCode') || data['antiFakeCode']!.isEmpty) {
-      data['antiFakeCode'] = '防伪码: $watermarkCode';
+      data['antiFakeCode'] = watermarkCode;
     }
 
     final tmpl = template ?? _defaultTemplate();

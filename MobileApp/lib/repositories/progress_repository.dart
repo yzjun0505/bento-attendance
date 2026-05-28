@@ -108,6 +108,30 @@ class ProgressRepository {
     }
   }
 
+  Future<void> reviewNode(
+    int nodeId, {
+    required String action,
+    String? remark,
+  }) async {
+    try {
+      final response = await apiClient.dio.post('/nodes/$nodeId/review', data: {
+        'action': action,
+        if (remark != null && remark.trim().isNotEmpty) 'remark': remark.trim(),
+      });
+      if (response.statusCode == 200 && response.data['code'] == 200) {
+        return;
+      }
+      throw Exception(response.data['message'] ?? '验收任务节点失败');
+    } on DioException catch (e) {
+      if (e.response?.data != null && e.response?.data['message'] != null) {
+        throw Exception(e.response!.data['message']);
+      }
+      throw Exception('网络连接失败，请检查网络后重试');
+    } catch (e) {
+      throw Exception('请求失败: $e');
+    }
+  }
+
   Future<Map<String, dynamic>> getReportsByNode(
     int nodeId, {
     int page = 1,
@@ -147,6 +171,7 @@ class ProgressRepository {
     String? riskNote,
     String? blockerNote,
     List<String>? photos,
+    List<String>? watermarkCodes,
   }) async {
     try {
       final data = <String, dynamic>{
@@ -158,6 +183,9 @@ class ProgressRepository {
       if (blockerNote != null) data['blocker_note'] = blockerNote;
       if (photos != null && photos.isNotEmpty) {
         data['photos'] = photos;
+      }
+      if (watermarkCodes != null && watermarkCodes.isNotEmpty) {
+        data['watermark_codes'] = watermarkCodes;
       }
 
       final response = await apiClient.dio.post(
@@ -208,6 +236,14 @@ class ProgressRepository {
       debugPrint('上传照片失败: $e');
       return null;
     }
+  }
+
+  Future<String> reserveWatermarkCode() async {
+    final response = await apiClient.dio.get('/checkin/reserve-code');
+    if (response.statusCode == 200 && response.data['data'] != null) {
+      return response.data['data']['watermark_code'] as String;
+    }
+    throw Exception('生成防伪码失败');
   }
 
   Future<List<String>?> uploadPhotos(List<File> files) async {

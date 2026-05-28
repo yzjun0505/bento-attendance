@@ -117,7 +117,7 @@ async function createNotification(req, res) {
       return res.status(400).json(errorResponse('标题和内容不能为空', 400));
     }
 
-    const validTypes = ['system', 'checkin', 'project', 'alert'];
+    const validTypes = ['system', 'checkin', 'project', 'alert', 'report'];
     if (!validTypes.includes(type)) {
       return res.status(400).json(errorResponse('无效的消息类型', 400));
     }

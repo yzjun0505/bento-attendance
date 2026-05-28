@@ -3,6 +3,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/bento_colors.dart';
 import '../../core/bento_typography.dart';
 import '../../blocs/progress/progress_bloc.dart';
+import '../../blocs/auth/auth_bloc.dart';
+import '../../blocs/auth/auth_state.dart';
 import '../../models/task_node_model.dart';
 import '../../models/progress_report_model.dart';
 import '../../widgets/bento_card.dart';
@@ -21,6 +23,17 @@ class NodeDetailScreen extends StatefulWidget {
 }
 
 class _NodeDetailScreenState extends State<NodeDetailScreen> {
+  bool get _canManageProgress {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is! AuthAuthenticated) return false;
+    return authState.user.role == 'admin' || authState.user.role == 'manager';
+  }
+
+  bool get _isClient {
+    final authState = context.read<AuthBloc>().state;
+    return authState is AuthAuthenticated && authState.user.role == 'client';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -35,6 +48,8 @@ class _NodeDetailScreenState extends State<NodeDetailScreen> {
         return colors.textTertiary;
       case 'in_progress':
         return colors.primary;
+      case 'pending_review':
+        return colors.warning;
       case 'completed':
         return colors.success;
       case 'paused':
@@ -50,6 +65,8 @@ class _NodeDetailScreenState extends State<NodeDetailScreen> {
         return colors.surfaceVariant;
       case 'in_progress':
         return colors.primaryLight;
+      case 'pending_review':
+        return colors.warningLight;
       case 'completed':
         return colors.successLight;
       case 'paused':
@@ -72,27 +89,29 @@ class _NodeDetailScreenState extends State<NodeDetailScreen> {
         foregroundColor: colors.textPrimary,
         elevation: 0,
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          final result = await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => BlocProvider.value(
-                value: context.read<ProgressBloc>(),
-                child: SubmitProgressScreen(node: widget.node),
-              ),
+      floatingActionButton: _isClient
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => BlocProvider.value(
+                      value: context.read<ProgressBloc>(),
+                      child: SubmitProgressScreen(node: widget.node),
+                    ),
+                  ),
+                );
+                if (!context.mounted) return;
+                if (result == true) {
+                  context
+                      .read<ProgressBloc>()
+                      .add(LoadProgressReports(nodeId: widget.node.id));
+                }
+              },
+              icon: const Icon(Icons.upload),
+              label: const Text('上报进度'),
             ),
-          );
-          if (!context.mounted) return;
-          if (result == true) {
-            context
-                .read<ProgressBloc>()
-                .add(LoadProgressReports(nodeId: widget.node.id));
-          }
-        },
-        icon: const Icon(Icons.upload),
-        label: const Text('上报进度'),
-      ),
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -310,6 +329,7 @@ class _NodeDetailScreenState extends State<NodeDetailScreen> {
 
   Widget _buildActions(BentoColors colors) {
     final node = widget.node;
+    if (!_canManageProgress) return const SizedBox.shrink();
 
     return Padding(
       padding: const EdgeInsets.symmetric(
@@ -338,12 +358,27 @@ class _NodeDetailScreenState extends State<NodeDetailScreen> {
           const SizedBox(width: BentoSpacing.space8),
           Expanded(
               child: _buildActionButton(
-            icon: Icons.check_circle_outline,
-            label: '完成',
+            icon: node.status == 'pending_review'
+                ? Icons.verified_outlined
+                : Icons.check_circle_outline,
+            label: node.status == 'pending_review' ? '验收' : '完成',
             color: colors.success,
             bgColor: colors.successLight,
-            onTap: () => _markComplete(),
+            onTap: () => node.status == 'pending_review'
+                ? _reviewNode('approve')
+                : _markComplete(),
           )),
+          if (node.status == 'pending_review') ...[
+            const SizedBox(width: BentoSpacing.space8),
+            Expanded(
+                child: _buildActionButton(
+              icon: Icons.undo,
+              label: '驳回',
+              color: colors.error,
+              bgColor: colors.errorLight,
+              onTap: () => _reviewNode('reject'),
+            )),
+          ],
           const SizedBox(width: BentoSpacing.space8),
           Expanded(
               child: _buildActionButton(
@@ -445,6 +480,7 @@ class _NodeDetailScreenState extends State<NodeDetailScreen> {
                       },
                     ));
                 Navigator.pop(ctx);
+                Navigator.pop(context, true);
               },
               child: Text('保存', style: TextStyle(color: colors.primary)),
             ),
@@ -461,6 +497,7 @@ class _NodeDetailScreenState extends State<NodeDetailScreen> {
           nodeId: widget.node.id,
           data: {'status': newNodeStatus},
         ));
+    Navigator.pop(context, true);
   }
 
   void _markComplete() {
@@ -471,6 +508,15 @@ class _NodeDetailScreenState extends State<NodeDetailScreen> {
             'progress_percent': 100,
           },
         ));
+    Navigator.pop(context, true);
+  }
+
+  void _reviewNode(String action) {
+    context.read<ProgressBloc>().add(ReviewTaskNode(
+          nodeId: widget.node.id,
+          action: action,
+        ));
+    Navigator.pop(context, true);
   }
 
   void _confirmDelete(BentoColors colors) {

@@ -18,12 +18,19 @@
             <el-option label="打卡通知" value="checkin" />
             <el-option label="项目通知" value="project" />
             <el-option label="告警通知" value="alert" />
+            <el-option label="日报通知" value="report" />
           </el-select>
           <el-button type="primary" :icon="Search" @click="loadNotifications">搜索</el-button>
         </div>
 
         <div class="table-section">
-          <el-table :data="notificationData" v-loading="loading" class="custom-table" style="width: 100%">
+          <el-table
+            :data="notificationData"
+            v-loading="loading"
+            class="custom-table clickable-table"
+            style="width: 100%"
+            @row-click="handleNotificationClick"
+          >
             <el-table-column prop="title" label="标题" min-width="160" />
             <el-table-column prop="type" label="类型" width="120">
               <template #default="{ row }">
@@ -44,7 +51,7 @@
             </el-table-column>
             <el-table-column label="操作" width="100" fixed="right">
               <template #default="{ row }">
-                <el-button type="danger" text size="small" @click="handleDeleteNotification(row)">删除</el-button>
+                <el-button type="danger" text size="small" @click.stop="handleDeleteNotification(row)">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -149,7 +156,9 @@
           <el-select v-model="sendForm.type" placeholder="请选择类型" style="width: 100%">
             <el-option label="系统通知" value="system" />
             <el-option label="打卡通知" value="checkin" />
+            <el-option label="项目通知" value="project" />
             <el-option label="告警通知" value="alert" />
+            <el-option label="日报通知" value="report" />
           </el-select>
         </el-form-item>
         <el-form-item label="接收对象" prop="user_id">
@@ -184,17 +193,20 @@
 
 <script setup>
 import { ref, reactive, onMounted, watch } from 'vue'
-import { getAllNotifications, sendNotification, deleteNotification } from '@/api/notifications'
+import { useRoute, useRouter } from 'vue-router'
+import { getAllNotifications, sendNotification, deleteNotification, markAsRead } from '@/api/notifications'
 import { getApprovals, approveApproval, rejectApproval } from '@/api/approvals'
 import { getUsers } from '@/api/users'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Promotion, Search } from '@element-plus/icons-vue'
 
-const typeNameMap = { system: '系统通知', checkin: '打卡通知', project: '项目通知', alert: '告警通知' }
-const typeTagMap = { system: '', checkin: 'success', project: 'warning', alert: 'danger' }
+const typeNameMap = { system: '系统通知', checkin: '打卡通知', project: '项目通知', alert: '告警通知', report: '日报通知' }
+const typeTagMap = { system: '', checkin: 'success', project: 'warning', alert: 'danger', report: 'primary' }
 const approvalTypeTagMap = { 补卡: 'info', 请假: 'warning', 加班: 'danger', 异常打卡: 'danger' }
 
 const activeTab = ref('notifications')
+const route = useRoute()
+const router = useRouter()
 const loading = ref(false)
 const sending = ref(false)
 const notificationData = ref([])
@@ -228,12 +240,17 @@ function getApprovalTypeTag(type) {
 }
 
 onMounted(() => {
+  if (route.query.tab === 'approvals') activeTab.value = 'approvals'
   loadNotifications()
   loadUsers()
 })
 
 watch(activeTab, (val) => {
   if (val === 'approvals') loadApprovals()
+})
+
+watch(() => route.query.tab, (tab) => {
+  if (tab === 'approvals') activeTab.value = 'approvals'
 })
 
 async function loadNotifications() {
@@ -288,6 +305,46 @@ async function handleDeleteNotification(row) {
   } catch (e) {
     console.error('删除通知失败:', e)
   }
+}
+
+async function handleNotificationClick(row) {
+  if (!row) return
+  if (row.is_read !== 1) {
+    try {
+      await markAsRead(row.id)
+      row.is_read = 1
+    } catch (_) {}
+  }
+  router.push(resolveNotificationTarget(row))
+}
+
+function resolveNotificationTarget(row) {
+  const text = `${row.title || ''} ${row.content || ''}`
+  const approvalId = matchId(text, /审批\s*#?(\d+)/i)
+  const checkinId = matchId(text, /打卡记录\s*#?(\d+)/i)
+  const projectId = matchId(text, /项目\s*#?(\d+)/i) || matchId(text, /project[_\s-]*id[:：]?\s*(\d+)/i)
+
+  if (approvalId || /审批|申请待审批|已通过|已驳回/.test(text)) {
+    return { name: 'Notifications', query: { tab: 'approvals', approvalId: approvalId || undefined } }
+  }
+  if (row.type === 'checkin' || checkinId || /打卡|考勤/.test(text)) {
+    return { name: 'Checkin', query: { checkinId: checkinId || undefined } }
+  }
+  if (row.type === 'project' || /项目进度|节点|施工|验收/.test(text)) {
+    return { name: 'ProjectProgress', query: { projectId: projectId || undefined } }
+  }
+  if (row.type === 'alert') {
+    return { name: 'Checkin' }
+  }
+  if (row.type === 'report') {
+    return { name: 'Dashboard' }
+  }
+  return { name: 'Dashboard' }
+}
+
+function matchId(text, pattern) {
+  const match = text.match(pattern)
+  return match?.[1]
 }
 
 // 审批相关方法
@@ -351,5 +408,9 @@ function formatTime(val) {
 }
 .notification-tabs :deep(.el-tabs__header) {
   margin-bottom: 0;
+}
+
+.clickable-table :deep(.el-table__row) {
+  cursor: pointer;
 }
 </style>

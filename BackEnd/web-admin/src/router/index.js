@@ -43,6 +43,12 @@ const routes = [
         meta: { title: '项目管理', icon: 'OfficeBuilding' }
       },
       {
+        path: 'project-progress',
+        name: 'ProjectProgress',
+        component: () => import('@/views/ProjectProgress.vue'),
+        meta: { title: '项目进度', icon: 'TrendCharts' }
+      },
+      {
         path: 'devices',
         name: 'Devices',
         component: () => import('@/views/Devices.vue'),
@@ -112,7 +118,7 @@ const router = createRouter({
 })
 
 router.beforeEach((to, from, next) => {
-  document.title = `${to.meta.title || '管理系统'} - 打卡管理系统`
+  document.title = `${to.meta.title || '管理系统'} - 境图项目协同管理平台`
   const token = localStorage.getItem('token')
   if (!to.meta.public && !token) {
     next('/login')

@@ -1,5 +1,5 @@
 /**
- * 多端协同打卡人员实时移动管理系统 - 后端服务入口
+ * 境图项目协同管理平台 - 后端服务入口
  */
 require('dotenv').config();
 const express = require('express');
@@ -42,6 +42,7 @@ const imRoutes = require('./routes/im');
 const aiRoutes = require('./routes/ai');
 const appVersionRoutes = require('./routes/appVersion');
 const projectManagerRoutes = require('./routes/projectManagers');
+const projectClientRoutes = require('./routes/projectClients');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -150,6 +151,7 @@ app.use('/api/sessions', sessionsRoutes);
 app.use('/api/im', imRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/project-managers', projectManagerRoutes);
+app.use('/api/project-clients', projectClientRoutes);
 
 // SPA 路由回退 — 所有非 API 请求返回 index.html（测试环境跳过）
 if (process.env.NODE_ENV !== 'test') {
@@ -237,7 +239,7 @@ async function start() {
       logger.info(`服务已启动，端口: ${config.port}`);
       console.log(`
 ╔═══════════════════════════════════════════════════╗
-║   打卡人员实时移动管理系统 - 后端服务              ║
+║   境图项目协同管理平台 - 后端服务                  ║
 ║   服务地址: http://localhost:${config.port}              ║
 ║   API地址:  http://localhost:${config.port}/api           ║
 ║   管理端:   http://localhost:${config.port}               ║

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/bento_colors.dart';
 import '../../core/bento_typography.dart';
+import '../../blocs/auth/auth_bloc.dart';
+import '../../blocs/auth/auth_state.dart';
 import '../../blocs/progress/progress_bloc.dart';
 import '../../models/project_progress_model.dart';
 import '../../widgets/bento_card.dart';
@@ -18,6 +20,11 @@ class ProgressWorkbenchScreen extends StatefulWidget {
 }
 
 class _ProgressWorkbenchScreenState extends State<ProgressWorkbenchScreen> {
+  bool get _isClient {
+    final authState = context.read<AuthBloc>().state;
+    return authState is AuthAuthenticated && authState.user.role == 'client';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -26,6 +33,7 @@ class _ProgressWorkbenchScreenState extends State<ProgressWorkbenchScreen> {
 
   String _statusLabel(ProjectProgress project) {
     if (project.overallProgress >= 100) return '已完成';
+    if (project.pendingReviewNodes > 0) return '待验收';
     if (project.inProgressNodes > 0) return '进行中';
     if (project.completedNodes >= project.totalNodes &&
         project.totalNodes > 0) {
@@ -38,6 +46,8 @@ class _ProgressWorkbenchScreenState extends State<ProgressWorkbenchScreen> {
     switch (status) {
       case '进行中':
         return colors.primary;
+      case '待验收':
+        return colors.warning;
       case '已完成':
         return colors.success;
       case '待开始':
@@ -51,6 +61,8 @@ class _ProgressWorkbenchScreenState extends State<ProgressWorkbenchScreen> {
     switch (status) {
       case '进行中':
         return colors.primaryLight;
+      case '待验收':
+        return colors.warningLight;
       case '已完成':
         return colors.successLight;
       case '待开始':
@@ -86,9 +98,9 @@ class _ProgressWorkbenchScreenState extends State<ProgressWorkbenchScreen> {
 
           if (state is AuthorizedProjectsLoaded) {
             if (state.projects.isEmpty) {
-              return const BentoEmptyState(
+              return BentoEmptyState(
                 icon: Icons.folder_open_outlined,
-                title: '暂无可管理项目',
+                title: _isClient ? '暂无可查看项目' : '暂无可管理项目',
                 description: '请联系管理员分配项目',
               );
             }
@@ -149,6 +161,7 @@ class _ProgressWorkbenchScreenState extends State<ProgressWorkbenchScreen> {
   Widget _buildProjectCard(
       BuildContext context, ProjectProgress project, BentoColors colors) {
     final status = _statusLabel(project);
+    final progressBloc = context.read<ProgressBloc>();
 
     return Padding(
       padding: const EdgeInsets.only(bottom: BentoSpacing.space12),
@@ -158,7 +171,7 @@ class _ProgressWorkbenchScreenState extends State<ProgressWorkbenchScreen> {
             context,
             MaterialPageRoute(
               builder: (_) => BlocProvider.value(
-                value: context.read<ProgressBloc>(),
+                value: progressBloc,
                 child: ProjectProgressScreen(
                   projectId: project.id,
                   projectName: project.name,
@@ -168,7 +181,7 @@ class _ProgressWorkbenchScreenState extends State<ProgressWorkbenchScreen> {
           ).then((_) {
             // 返回时重新加载项目列表，避免子页面的事件覆盖了项目列表状态
             if (mounted) {
-              context.read<ProgressBloc>().add(const LoadAuthorizedProjects());
+              progressBloc.add(const LoadAuthorizedProjects());
             }
           });
         },
@@ -254,6 +267,13 @@ class _ProgressWorkbenchScreenState extends State<ProgressWorkbenchScreen> {
                   '已完成 ${project.completedNodes}',
                   colors.success,
                   colors.successLight,
+                ),
+                _buildStatChip(
+                  context,
+                  colors,
+                  '待验收 ${project.pendingReviewNodes}',
+                  colors.warning,
+                  colors.warningLight,
                 ),
                 _buildStatChip(
                   context,

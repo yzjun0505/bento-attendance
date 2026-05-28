@@ -7,6 +7,7 @@ const { getPool } = require('../models/db');
 const { successResponse, errorResponse, parsePagination, getTodayRange } = require('../utils/helpers');
 const { getAccessibleUserIds } = require('../middleware/authScope');
 const checkinService = require('../services/checkinService');
+const watermarkLookup = require('../services/watermarkLookupService');
 const { getTypeName } = checkinService;
 
 /**
@@ -79,11 +80,16 @@ async function getCheckins(req, res) {
     }
 
     const { scope } = req.query;
-    const accessibleUserIds = await getAccessibleUserIds(req);
-    const targetUserIds = scope === 'team' ? accessibleUserIds : [req.user.id];
-    const placeholders = targetUserIds.map(() => '?').join(',');
-    where += ` AND c.user_id IN (${placeholders})`;
-    params.push(...targetUserIds);
+    if (!(scope === 'team' && req.user.role === 'admin')) {
+      const accessibleUserIds = await getAccessibleUserIds(req);
+      const targetUserIds = scope === 'team' ? accessibleUserIds : [req.user.id];
+      if (targetUserIds.length === 0) {
+        return res.json(successResponse({ list: [], total: 0, page, pageSize }));
+      }
+      const placeholders = targetUserIds.map(() => '?').join(',');
+      where += ` AND c.user_id IN (${placeholders})`;
+      params.push(...targetUserIds);
+    }
 
     const [countRows] = await db.execute(
       `SELECT COUNT(*) as total FROM checkins c ${where}`,
@@ -238,20 +244,13 @@ async function searchByWatermarkCode(req, res) {
     }
 
     const db = getPool();
-    const [rows] = await db.query(
-      `SELECT c.*, c.watermark_code, u.name as user_name, u.username, p.name as project_name
-       FROM checkins c
-       LEFT JOIN users u ON c.user_id = u.id
-       LEFT JOIN projects p ON c.project_id = p.id
-       WHERE c.watermark_code = ?`,
-      [code.toUpperCase()]
-    );
+    const result = await watermarkLookup.lookupWatermarkCode(db, code);
 
-    if (rows.length === 0) {
+    if (!result.found) {
       return res.json(successResponse(null, '未找到该防伪码对应的打卡记录'));
     }
 
-    res.json(successResponse(rows[0]));
+    res.json(successResponse(result.data));
   } catch (err) {
     console.error('搜索防伪码失败:', err);
     res.status(500).json(errorResponse('服务器错误'));
@@ -322,11 +321,17 @@ async function exportCheckins(req, res) {
     }
 
     const { scope } = req.query;
-    const accessibleUserIds = await getAccessibleUserIds(req);
-    const targetUserIds = scope === 'team' ? accessibleUserIds : [req.user.id];
-    const placeholders = targetUserIds.map(() => '?').join(',');
-    where += ` AND c.user_id IN (${placeholders})`;
-    params.push(...targetUserIds);
+    if (!(scope === 'team' && req.user.role === 'admin')) {
+      const accessibleUserIds = await getAccessibleUserIds(req);
+      const targetUserIds = scope === 'team' ? accessibleUserIds : [req.user.id];
+      if (targetUserIds.length === 0) {
+        where += ' AND 1=0';
+      } else {
+        const placeholders = targetUserIds.map(() => '?').join(',');
+        where += ` AND c.user_id IN (${placeholders})`;
+        params.push(...targetUserIds);
+      }
+    }
 
     const [rows] = await db.query(
       `SELECT c.*, c.watermark_code, u.name as user_name, u.username, p.name as project_name,
