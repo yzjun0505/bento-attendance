@@ -10,7 +10,7 @@
             <div class="logo-icon-box">
               <el-icon :size="22" color="#ffffff"><Odometer /></el-icon>
             </div>
-            <span class="logo-text">打卡管理空间</span>
+            <span class="logo-text">境图项目协同管理平台</span>
           </div>
 
           <!-- 高频导航 -->
