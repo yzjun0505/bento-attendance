@@ -35,8 +35,21 @@ PROJECT_STRUCTURE.md
 jingmap_er_diagram.sql
 *需求分析*.docx
 *需求分析说明书.docx
-* 2.json
-* 2.vue
+
+# Presentation & document files
+*.pptx
+*.docx
+CLAUDE*.md
+
+# Local scripts & test outputs
+build_*_ppt.js
+create_ppt.js
+perf-test/
+outputs/
+
+# macOS duplicate files (* 2.*)
+* 2.*
+* 2
 
 # Logs
 logs/
