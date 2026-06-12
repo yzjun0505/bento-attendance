@@ -9,7 +9,7 @@ class ApiClient {
   final Dio _refreshDio = Dio();
   final _storage = const FlutterSecureStorage();
   static Future<String?>? _refreshing;
-  static const _defaultApiBaseUrl = 'http://150.158.79.174/api';
+  static const _defaultApiBaseUrl = 'http://43.155.162.201/api';
 
   static Future<void> loadRuntimeConfig() async {}
 
@@ -19,9 +19,9 @@ class ApiClient {
     if (v.isNotEmpty) return v;
     if (kIsWeb) return Uri.base.host.isNotEmpty ? Uri.base.host : '127.0.0.1';
     if (defaultTargetPlatform == TargetPlatform.android) {
-      return '150.158.79.174';
+      return '43.155.162.201';
     }
-    return '150.158.79.174';
+    return '43.155.162.201';
   }
 
   static String get baseUrl {
