@@ -1,7 +1,7 @@
 name: jingmap_app
 description: 境图项目协同管理平台
 publish_to: 'none'
-version: 1.0.12+21
+version: 1.0.14+12
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
