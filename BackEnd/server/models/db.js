@@ -117,18 +117,14 @@ async function initDatabase() {
     }
   }
 
-  // 迁移：扩展 users.role，支持甲方用户
+  // 迁移：补齐甲方用户角色
   try {
-    const [roleColumns] = await db.execute("SHOW COLUMNS FROM users LIKE 'role'");
-    const roleType = roleColumns[0]?.Type || '';
-    if (!roleType.includes("'client'")) {
-      await db.execute(
-        "ALTER TABLE users MODIFY COLUMN role ENUM('admin','manager','worker','client') NOT NULL DEFAULT 'worker'"
-      );
-      logger.info('已迁移 users 表：扩展 role 支持 client');
-    }
+    await db.execute(`
+      ALTER TABLE users MODIFY COLUMN role ENUM('admin', 'manager', 'worker', 'client') NOT NULL DEFAULT 'worker'
+    `);
+    logger.info('已迁移 users 表：补齐 client 角色');
   } catch (e) {
-    logger.error('迁移 users 表 role 字段失败', { error: e.message });
+    logger.error('迁移 users 表 role 枚举失败', { error: e.message });
   }
 
   // 创建项目表

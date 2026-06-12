@@ -21,10 +21,7 @@
           @keyup.enter="loadData"
         />
         <el-select v-model="filters.role" placeholder="角色" clearable style="width: 130px" @change="loadData">
-          <el-option label="管理员" value="admin" />
-          <el-option label="项目经理" value="manager" />
-          <el-option label="工人" value="worker" />
-          <el-option label="甲方用户" value="client" />
+          <el-option v-for="role in roleOptions" :key="role.value" :label="role.label" :value="role.value" />
         </el-select>
         <el-select v-model="filters.status" placeholder="状态" clearable style="width: 130px" @change="loadData">
           <el-option label="在职" :value="1" />
@@ -77,9 +74,9 @@
         <el-table-column label="操作" width="140" fixed="right">
           <template #default="{ row }">
             <div class="table-actions">
-              <el-button type="primary" link :icon="Edit" @click="openDialog(row)" title="编辑"></el-button>
-              <el-button type="danger" link :icon="Delete" @click="handleDelete(row)" title="删除"></el-button>
-              <el-dropdown trigger="click" @command="(cmd) => handleCommand(cmd, row)">
+              <el-button v-if="canManageRow(row)" type="primary" link :icon="Edit" @click="openDialog(row)" title="编辑"></el-button>
+              <el-button v-if="canManageRow(row)" type="danger" link :icon="Delete" @click="handleDelete(row)" title="删除"></el-button>
+              <el-dropdown v-if="canManageRow(row)" trigger="click" @command="(cmd) => handleCommand(cmd, row)">
                 <el-button link :icon="MoreFilled" style="margin-left: 8px; color: var(--text-secondary);"></el-button>
                 <template #dropdown>
                   <el-dropdown-menu>
@@ -123,15 +120,20 @@
         <el-form-item v-if="!editingUser" label="密码" prop="password">
           <el-input v-model="dialogForm.password" type="password" placeholder="请输入密码" show-password />
         </el-form-item>
+        <el-form-item v-if="!editingUser" label="二级密码" prop="secondaryPassword">
+          <el-input
+            v-model="dialogForm.secondaryPassword"
+            type="password"
+            placeholder="请输入当前登录账号密码"
+            show-password
+          />
+        </el-form-item>
         <el-form-item label="姓名" prop="name">
           <el-input v-model="dialogForm.name" placeholder="请输入姓名" />
         </el-form-item>
         <el-form-item label="角色" prop="role">
           <el-select v-model="dialogForm.role" placeholder="请选择角色" style="width: 100%">
-            <el-option label="管理员" value="admin" />
-            <el-option label="项目经理" value="manager" />
-            <el-option label="工人" value="worker" />
-            <el-option label="甲方用户" value="client" />
+            <el-option v-for="role in assignableRoleOptions" :key="role.value" :label="role.label" :value="role.value" />
           </el-select>
         </el-form-item>
         <el-form-item label="手机号" prop="phone">
@@ -189,7 +191,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
 import { getUsers, createUser, updateUser, deleteUser, resetPassword } from '@/api/users'
 import { getAllProjects } from '@/api/projects'
 import { getProjectManagers, bindProjectManager, unbindProjectManager } from '@/api/projectManagers'
@@ -199,6 +201,13 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search, Edit, Delete, MoreFilled } from '@element-plus/icons-vue'
 
 const roleMap = { admin: '管理员', manager: '项目经理', worker: '工人', client: '甲方用户' }
+const allRoleOptions = [
+  { label: '管理员', value: 'admin' },
+  { label: '项目经理', value: 'manager' },
+  { label: '工人', value: 'worker' },
+  { label: '甲方用户', value: 'client' }
+]
+const managerRoleOptions = allRoleOptions.filter(role => ['worker', 'client'].includes(role.value))
 
 const loading = ref(false)
 const saving = ref(false)
@@ -214,7 +223,10 @@ const dialogFormRef = ref(null)
 const authRows = ref([])
 const selectedProjectIds = ref([])
 const userStore = useUserStore()
+
 const isAdmin = computed(() => userStore.userInfo?.role === 'admin')
+const roleOptions = computed(() => isAdmin.value ? allRoleOptions : managerRoleOptions)
+const assignableRoleOptions = computed(() => isAdmin.value ? allRoleOptions : managerRoleOptions)
 const authDialogTitle = computed(() => authorizingUser.value?.role === 'client' ? '甲方项目授权' : '项目经理授权')
 const authUserLabel = computed(() => authorizingUser.value?.role === 'client' ? '甲方用户' : '项目经理')
 
@@ -222,7 +234,7 @@ const filters = reactive({ keyword: '', role: '', status: '', project_id: '' })
 const pagination = reactive({ page: 1, pageSize: 20, total: 0 })
 
 const dialogForm = reactive({
-  username: '', password: '', name: '', role: 'worker', phone: '', project_id: null, status: 1
+  username: '', password: '', secondaryPassword: '', name: '', role: 'worker', phone: '', project_id: null, status: 1
 })
 
 const validatePhone = (_rule, value, callback) => {
@@ -236,12 +248,16 @@ const validatePhone = (_rule, value, callback) => {
 const dialogRules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
+  secondaryPassword: [{ required: true, message: '请输入二级密码', trigger: 'blur' }],
   name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
   role: [{ required: true, message: '请选择角色', trigger: 'change' }],
   phone: [{ required: true, validator: validatePhone, trigger: 'blur' }]
 }
 
-onMounted(() => {
+onMounted(async () => {
+  if (!userStore.userInfo) {
+    await userStore.fetchProfile().catch(() => null)
+  }
   loadData()
   loadProjects()
 })
@@ -271,11 +287,15 @@ async function loadProjects() {
 function openDialog(user = null) {
   editingUser.value = user
   if (user) {
-    Object.assign(dialogForm, { ...user, password: '' })
+    Object.assign(dialogForm, { ...user, password: '', secondaryPassword: '' })
   } else {
-    Object.assign(dialogForm, { username: '', password: '', name: '', role: 'worker', phone: '', project_id: null, status: 1 })
+    Object.assign(dialogForm, { username: '', password: '', secondaryPassword: '', name: '', role: 'worker', phone: '', project_id: null, status: 1 })
   }
   dialogVisible.value = true
+}
+
+function canManageRow(row) {
+  return isAdmin.value || ['worker', 'client'].includes(row.role)
 }
 
 async function handleSave() {
@@ -285,11 +305,12 @@ async function handleSave() {
   saving.value = true
   try {
     if (editingUser.value) {
-      const { username, password, ...data } = dialogForm
+      const { username, password, secondaryPassword, ...data } = dialogForm
       await updateUser(editingUser.value.id, data)
       ElMessage.success('更新成功')
     } else {
-      await createUser(dialogForm)
+      const { username, password, secondaryPassword, name, role, phone, project_id } = dialogForm
+      await createUser({ username, password, secondaryPassword, name, role, phone, project_id })
       ElMessage.success('创建成功')
     }
     dialogVisible.value = false
@@ -302,27 +323,47 @@ async function handleSave() {
 }
 
 async function handleDelete(row) {
-  await ElMessageBox.confirm(`确定删除用户「${row.name}」？`, '警告', { type: 'warning' })
   try {
-    await deleteUser(row.id)
+    const message = row.role === 'admin'
+      ? `确定删除管理员「${row.name}」？系统会保留至少一个在职管理员，且不能删除当前登录账号。`
+      : `确定删除用户「${row.name}」？`
+    await ElMessageBox.confirm(message, '警告', { type: 'warning' })
+    const { value: secondaryPassword } = await ElMessageBox.prompt('请输入当前登录账号密码', '二级密码验证', {
+      inputPattern: /^.+$/,
+      inputErrorMessage: '请输入二级密码',
+      inputType: 'password',
+      confirmButtonText: '确定删除',
+      cancelButtonText: '取消'
+    })
+    await deleteUser(row.id, { secondaryPassword })
     ElMessage.success('删除成功')
     loadData()
   } catch (e) {
+    if (e === 'cancel' || e === 'close') return
     ElMessage.error(e.response?.data?.message || '删除失败')
   }
 }
 
 async function handleResetPwd(row) {
-  const { value } = await ElMessageBox.prompt('请输入新密码', `重置「${row.name}」密码`, {
-    inputPattern: /^.{6,}$/,
-    inputErrorMessage: '密码至少6位',
-    confirmButtonText: '确定',
-    cancelButtonText: '取消'
-  })
   try {
-    await resetPassword(row.id, { password: value })
+    const { value: password } = await ElMessageBox.prompt('请输入新密码', `重置「${row.name}」密码`, {
+      inputPattern: /^.{6,}$/,
+      inputErrorMessage: '密码至少6位',
+      inputType: 'password',
+      confirmButtonText: '下一步',
+      cancelButtonText: '取消'
+    })
+    const { value: secondaryPassword } = await ElMessageBox.prompt('请输入当前登录账号密码', '二级密码验证', {
+      inputPattern: /^.+$/,
+      inputErrorMessage: '请输入二级密码',
+      inputType: 'password',
+      confirmButtonText: '确定',
+      cancelButtonText: '取消'
+    })
+    await resetPassword(row.id, { password, secondaryPassword })
     ElMessage.success('密码已重置')
   } catch (e) {
+    if (e === 'cancel' || e === 'close') return
     ElMessage.error(e.response?.data?.message || '重置密码失败')
   }
 }

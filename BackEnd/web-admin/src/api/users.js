@@ -16,8 +16,8 @@ export function updateUser(id, data) {
   return request.put(`/users/${id}`, data)
 }
 
-export function deleteUser(id) {
-  return request.delete(`/users/${id}`)
+export function deleteUser(id, data) {
+  return request.delete(`/users/${id}`, { data })
 }
 
 export function resetPassword(id, data) {

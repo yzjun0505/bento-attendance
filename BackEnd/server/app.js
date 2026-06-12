@@ -48,23 +48,135 @@ const app = express();
 app.set('trust proxy', 1);
 const server = http.createServer(app);
 
+app.disable('x-powered-by');
+app.set('trust proxy', 1);
+
+// ========================
+// 安全配置
+// ========================
+const isProduction = process.env.NODE_ENV === 'production';
+const parseList = (value) => String(value || '')
+  .split(',')
+  .map((item) => item.trim())
+  .filter(Boolean);
+const allowedOrigins = parseList(process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGIN);
+const allowWildcardOrigin = allowedOrigins.includes('*') && !isProduction;
+
+function isOriginAllowed(origin) {
+  if (!origin) return true;
+  if (allowWildcardOrigin) return true;
+  if (allowedOrigins.length === 0) return !isProduction;
+  return allowedOrigins.includes(origin);
+}
+
+function isSameHostOrigin(req, origin) {
+  try {
+    const originUrl = new URL(origin);
+    return originUrl.host === req.get('host');
+  } catch (err) {
+    return false;
+  }
+}
+
+function createCorsOptions(req) {
+  return {
+    origin(origin, callback) {
+      if (!origin || isSameHostOrigin(req, origin) || isOriginAllowed(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true,
+  };
+}
+
+function corsMiddleware(req, res, next) {
+  return cors(createCorsOptions(req))(req, res, next);
+}
+
+function isSocketOriginAllowed(socketOrigin) {
+  if (!socketOrigin) return true;
+  if (isOriginAllowed(socketOrigin)) return true;
+  if (allowedOrigins.length > 0) return false;
+  return !isProduction;
+}
+
+const socketCorsOrigin = (origin, callback) => {
+  if (isOriginAllowed(origin)) {
+    return callback(null, true);
+  }
+  if (isSocketOriginAllowed(origin)) {
+    return callback(null, true);
+  }
+  return callback(new Error('Not allowed by CORS'));
+};
+
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (isProduction) {
+    res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+  }
+  next();
+});
+
 // ========================
 // 请求限流
 // ========================
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 1000,
-  message: { code: 429, message: '请求过于频繁，请稍后再试' },
+const commonRateLimitOptions = {
   standardHeaders: true,
   legacyHeaders: false,
+  message: { code: 429, message: '请求过于频繁，请稍后再试' },
+};
+
+const apiLimiter = rateLimit({
+  ...commonRateLimitOptions,
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env.API_RATE_LIMIT_MAX || 300),
+});
+
+const authLimiter = rateLimit({
+  ...commonRateLimitOptions,
+  windowMs: 10 * 60 * 1000,
+  max: Number(process.env.AUTH_RATE_LIMIT_MAX || 20),
+  skipSuccessfulRequests: true,
+  message: { code: 429, message: '登录尝试过于频繁，请稍后再试' },
+});
+
+const writeLimiter = rateLimit({
+  ...commonRateLimitOptions,
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env.WRITE_RATE_LIMIT_MAX || 120),
+});
+
+const uploadLimiter = rateLimit({
+  ...commonRateLimitOptions,
+  windowMs: 60 * 60 * 1000,
+  max: Number(process.env.UPLOAD_RATE_LIMIT_MAX || 30),
+  message: { code: 429, message: '上传过于频繁，请稍后再试' },
 });
 
 // Socket.IO
+const socketConnectionsByIp = new Map();
+const socketConnectionLimit = Number(process.env.SOCKET_CONNECTION_LIMIT || 20);
+
+function getSocketIp(socket) {
+  const forwardedFor = socket.handshake.headers['x-forwarded-for'];
+  if (forwardedFor) {
+    return String(forwardedFor).split(',')[0].trim();
+  }
+  return socket.handshake.address || 'unknown';
+}
+
 const io = new Server(server, {
   cors: {
-    origin: '*',
-    methods: ['GET', 'POST']
+    origin: socketCorsOrigin,
+    methods: ['GET', 'POST'],
+    credentials: true,
   },
+  maxHttpBufferSize: Number(process.env.SOCKET_MAX_BUFFER_SIZE || 1024 * 1024),
   pingTimeout: 60000,
   pingInterval: 25000,
   transports: ['websocket', 'polling']
@@ -77,10 +189,19 @@ app.set('io', io);
 // 中间件
 // ========================
 app.use(compression());
-app.use(cors());
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(corsMiddleware);
+app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: process.env.URLENCODED_BODY_LIMIT || '1mb' }));
 app.use('/api/', apiLimiter);
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
+app.use('/api/upload', uploadLimiter);
+app.use('/api/', (req, res, next) => {
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+    return writeLimiter(req, res, next);
+  }
+  next();
+});
 
 // 静态文件 - Web管理端
 app.use(express.static(path.join(__dirname, '../dist')));
@@ -153,6 +274,19 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/project-managers', projectManagerRoutes);
 app.use('/api/project-clients', projectClientRoutes);
 
+// ========================
+// 错误处理中间件
+// ========================
+app.use((err, req, res, next) => {
+  if (err && err.message === 'Not allowed by CORS') {
+    return res.status(403).json({ code: 403, message: '请求来源不被允许', data: null });
+  }
+  if (err && err.type === 'entity.too.large') {
+    return res.status(413).json({ code: 413, message: '请求内容过大', data: null });
+  }
+  next(err);
+});
+
 // SPA 路由回退 — 所有非 API 请求返回 index.html（测试环境跳过）
 if (process.env.NODE_ENV !== 'test') {
   app.get('*', (req, res) => {
@@ -169,6 +303,17 @@ if (process.env.NODE_ENV !== 'test') {
 // Socket.IO 事件
 // ========================
 const onlineUsers = new Map();
+
+io.use((socket, next) => {
+  const ip = getSocketIp(socket);
+  const currentConnections = socketConnectionsByIp.get(ip) || 0;
+  if (currentConnections >= socketConnectionLimit) {
+    return next(new Error('连接过于频繁，请稍后再试'));
+  }
+  socketConnectionsByIp.set(ip, currentConnections + 1);
+  socket.data.clientIp = ip;
+  next();
+});
 
 io.on('connection', (socket) => {
   logger.info(`Socket 连接: ${socket.id}`);
@@ -195,6 +340,16 @@ io.on('connection', (socket) => {
 
   // 断开连接
   socket.on('disconnect', () => {
+    const ip = socket.data.clientIp;
+    if (ip) {
+      const currentConnections = socketConnectionsByIp.get(ip) || 0;
+      if (currentConnections <= 1) {
+        socketConnectionsByIp.delete(ip);
+      } else {
+        socketConnectionsByIp.set(ip, currentConnections - 1);
+      }
+    }
+
     for (const [userId, info] of onlineUsers) {
       if (info.socket_id === socket.id) {
         onlineUsers.delete(userId);

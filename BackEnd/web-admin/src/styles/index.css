@@ -440,6 +440,7 @@ html.dark .el-date-editor {
 .role-admin { color: var(--accent-red); background: rgba(248, 113, 113, 0.12); }
 .role-manager { color: var(--accent-blue); background: rgba(79, 140, 255, 0.12); }
 .role-worker { color: var(--accent-green); background: rgba(52, 211, 153, 0.12); }
+.role-client { color: var(--accent-blue); background: rgba(59, 130, 246, 0.12); }
 
 /* 滚动条 */
 ::-webkit-scrollbar {

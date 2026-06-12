@@ -29,6 +29,124 @@ function isValidPhone(phone) {
   return /^\d{11}$/.test(normalizePhone(phone));
 }
 
+const VALID_USER_ROLES = new Set(['admin', 'manager', 'worker', 'client']);
+const MANAGER_MANAGEABLE_ROLES = new Set(['worker', 'client']);
+
+function validateUserRole(role) {
+  if (role !== undefined && !VALID_USER_ROLES.has(role)) {
+    return { ok: false, status: 400, message: '无效的用户角色' };
+  }
+  return { ok: true };
+}
+
+function canManagerManageRole(role) {
+  return MANAGER_MANAGEABLE_ROLES.has(role);
+}
+
+function ensureCreatePermission(actor, role) {
+  if (actor.role === 'admin') {
+    return { ok: true };
+  }
+  if (actor.role === 'manager' && canManagerManageRole(role)) {
+    return { ok: true };
+  }
+  return { ok: false, status: 403, message: '项目经理只能创建工人或甲方用户' };
+}
+
+async function ensureTargetManagePermission(db, actor, targetUserId, nextRole) {
+  const [rows] = await db.execute('SELECT role FROM users WHERE id = ?', [targetUserId]);
+  if (rows.length === 0) {
+    return { ok: false, status: 404, message: '用户不存在' };
+  }
+
+  const currentRole = rows[0].role;
+  if (actor.role === 'admin') {
+    return { ok: true, currentRole };
+  }
+
+  if (actor.role !== 'manager') {
+    return { ok: false, status: 403, message: '无权限操作该用户' };
+  }
+
+  if (!canManagerManageRole(currentRole)) {
+    return { ok: false, status: 403, message: '项目经理不能管理管理员或项目经理账号' };
+  }
+
+  if (nextRole !== undefined && !canManagerManageRole(nextRole)) {
+    return { ok: false, status: 403, message: '项目经理不能把用户设置为管理员或项目经理' };
+  }
+
+  return { ok: true, currentRole };
+}
+
+async function verifySecondaryPassword(db, req, password) {
+  if (!password) {
+    return { ok: false, status: 400, message: '请输入二级密码' };
+  }
+
+  const [rows] = await db.execute(
+    'SELECT password FROM users WHERE id = ?',
+    [req.user.id]
+  );
+
+  if (rows.length === 0) {
+    return { ok: false, status: 404, message: '当前登录用户不存在' };
+  }
+
+  const isMatch = await bcrypt.compare(password, rows[0].password);
+  if (!isMatch) {
+    return { ok: false, status: 400, message: '二级密码错误' };
+  }
+
+  return { ok: true };
+}
+
+async function ensureLastActiveAdminSafe(db, userId, nextRole, nextStatus) {
+  const [rows] = await db.execute('SELECT role, status FROM users WHERE id = ?', [userId]);
+  if (rows.length === 0) {
+    return { ok: false, status: 404, message: '用户不存在' };
+  }
+
+  const current = rows[0];
+  const roleAfterUpdate = nextRole !== undefined ? nextRole : current.role;
+  const statusAfterUpdate = nextStatus !== undefined ? Number(nextStatus) : current.status;
+
+  if (current.role !== 'admin' || (roleAfterUpdate === 'admin' && statusAfterUpdate === 1)) {
+    return { ok: true };
+  }
+
+  const [adminRows] = await db.execute(
+    'SELECT COUNT(*) as count FROM users WHERE role = ? AND status = 1 AND id <> ?',
+    ['admin', userId]
+  );
+
+  if (adminRows[0].count === 0) {
+    return { ok: false, status: 400, message: '至少保留一个在职管理员账号' };
+  }
+
+  return { ok: true };
+}
+
+async function ensureAdminDeletionSafe(db, actor, targetUserId) {
+  if (actor.role !== 'admin') {
+    return { ok: false, status: 403, message: '只有管理员可以删除管理员账号' };
+  }
+  if (Number(actor.id) === Number(targetUserId)) {
+    return { ok: false, status: 400, message: '不能删除当前登录的管理员账号' };
+  }
+
+  const [adminRows] = await db.execute(
+    'SELECT COUNT(*) as count FROM users WHERE role = ? AND status = 1 AND id <> ?',
+    ['admin', targetUserId]
+  );
+
+  if (adminRows[0].count === 0) {
+    return { ok: false, status: 400, message: '至少保留一个在职管理员账号' };
+  }
+
+  return { ok: true };
+}
+
 /**
  * 获取用户列表
  * GET /api/users
@@ -50,6 +168,9 @@ async function getUsers(req, res) {
     if (role) {
       where += ' AND u.role = ?';
       params.push(role);
+    }
+    if (req.user.role === 'manager') {
+      where += " AND u.role IN ('worker', 'client')";
     }
     if (status !== undefined && status !== '') {
       where += ' AND u.status = ?';
@@ -101,6 +222,9 @@ async function getUserById(req, res) {
     if (rows.length === 0) {
       return res.status(404).json(errorResponse('用户不存在', 404));
     }
+    if (req.user.role === 'manager' && !canManagerManageRole(rows[0].role)) {
+      return res.status(403).json(errorResponse('项目经理不能查看管理员或项目经理账号', 403));
+    }
 
     res.json(successResponse(rows[0]));
   } catch (err) {
@@ -115,9 +239,14 @@ async function getUserById(req, res) {
  */
 async function createUser(req, res) {
   try {
-    const { username, password, name, role, phone, project_id } = req.body;
+    const { username, password, name, role, phone, project_id, secondaryPassword } = req.body;
+    const targetRole = role || 'worker';
     if (!username || !password) {
       return res.status(400).json(errorResponse('用户名和密码不能为空', 400));
+    }
+    const roleCheck = validateUserRole(targetRole);
+    if (!roleCheck.ok) {
+      return res.status(roleCheck.status).json(errorResponse(roleCheck.message, roleCheck.status));
     }
 
     const normalizedPhone = normalizePhone(phone);
@@ -126,6 +255,16 @@ async function createUser(req, res) {
     }
 
     const db = getPool();
+    const permissionCheck = ensureCreatePermission(req.user, targetRole);
+    if (!permissionCheck.ok) {
+      return res.status(permissionCheck.status).json(errorResponse(permissionCheck.message, permissionCheck.status));
+    }
+
+    const secondaryCheck = await verifySecondaryPassword(db, req, secondaryPassword);
+    if (!secondaryCheck.ok) {
+      return res.status(secondaryCheck.status).json(errorResponse(secondaryCheck.message, secondaryCheck.status));
+    }
+
     const [existing] = await db.execute('SELECT id FROM users WHERE username = ?', [username]);
     if (existing.length > 0) {
       return res.status(400).json(errorResponse('用户名已存在', 400));
@@ -134,7 +273,7 @@ async function createUser(req, res) {
     const hashedPassword = await bcrypt.hash(password, 10);
     const [result] = await db.execute(
       'INSERT INTO users (username, password, name, role, phone, project_id) VALUES (?, ?, ?, ?, ?, ?)',
-      [username, hashedPassword, name || '', role || 'worker', normalizedPhone, project_id || null]
+      [username, hashedPassword, name || '', targetRole, normalizedPhone, project_id || null]
     );
 
     // 异步同步到腾讯云 IM
@@ -175,6 +314,21 @@ async function updateUser(req, res) {
   try {
     const { name, role, phone, email, project_id, status, avatar } = req.body;
     const db = getPool();
+
+    const roleCheck = validateUserRole(role);
+    if (!roleCheck.ok) {
+      return res.status(roleCheck.status).json(errorResponse(roleCheck.message, roleCheck.status));
+    }
+
+    const permissionCheck = await ensureTargetManagePermission(db, req.user, req.params.id, role);
+    if (!permissionCheck.ok) {
+      return res.status(permissionCheck.status).json(errorResponse(permissionCheck.message, permissionCheck.status));
+    }
+
+    const adminSafety = await ensureLastActiveAdminSafe(db, req.params.id, role, status);
+    if (!adminSafety.ok) {
+      return res.status(adminSafety.status).json(errorResponse(adminSafety.message, adminSafety.status));
+    }
 
     const fields = [];
     const params = [];
@@ -246,13 +400,25 @@ async function updateUser(req, res) {
  */
 async function deleteUser(req, res) {
   try {
+    const { secondaryPassword } = req.body || {};
     const db = getPool();
-    const [rows] = await db.execute('SELECT role FROM users WHERE id = ?', [req.params.id]);
+    const [rows] = await db.execute('SELECT role, status FROM users WHERE id = ?', [req.params.id]);
     if (rows.length === 0) {
       return res.status(404).json(errorResponse('用户不存在', 404));
     }
+    const permissionCheck = await ensureTargetManagePermission(db, req.user, req.params.id);
+    if (!permissionCheck.ok) {
+      return res.status(permissionCheck.status).json(errorResponse(permissionCheck.message, permissionCheck.status));
+    }
     if (rows[0].role === 'admin') {
-      return res.status(400).json(errorResponse('不能删除管理员账号', 400));
+      const adminDeletionCheck = await ensureAdminDeletionSafe(db, req.user, req.params.id);
+      if (!adminDeletionCheck.ok) {
+        return res.status(adminDeletionCheck.status).json(errorResponse(adminDeletionCheck.message, adminDeletionCheck.status));
+      }
+    }
+    const secondaryCheck = await verifySecondaryPassword(db, req, secondaryPassword);
+    if (!secondaryCheck.ok) {
+      return res.status(secondaryCheck.status).json(errorResponse(secondaryCheck.message, secondaryCheck.status));
     }
 
     await db.execute('DELETE FROM users WHERE id = ?', [req.params.id]);
@@ -269,12 +435,25 @@ async function deleteUser(req, res) {
  */
 async function resetPassword(req, res) {
   try {
-    const { password } = req.body;
+    const { password, secondaryPassword } = req.body;
     if (!password) {
       return res.status(400).json(errorResponse('新密码不能为空', 400));
     }
 
     const db = getPool();
+    const [rows] = await db.execute('SELECT id FROM users WHERE id = ?', [req.params.id]);
+    if (rows.length === 0) {
+      return res.status(404).json(errorResponse('用户不存在', 404));
+    }
+    const permissionCheck = await ensureTargetManagePermission(db, req.user, req.params.id);
+    if (!permissionCheck.ok) {
+      return res.status(permissionCheck.status).json(errorResponse(permissionCheck.message, permissionCheck.status));
+    }
+    const secondaryCheck = await verifySecondaryPassword(db, req, secondaryPassword);
+    if (!secondaryCheck.ok) {
+      return res.status(secondaryCheck.status).json(errorResponse(secondaryCheck.message, secondaryCheck.status));
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
     await db.execute('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, req.params.id]);
 
