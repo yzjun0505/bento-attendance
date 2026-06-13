@@ -9,19 +9,20 @@ class ApiClient {
   final Dio _refreshDio = Dio();
   final _storage = const FlutterSecureStorage();
   static Future<String?>? _refreshing;
-  static const _defaultApiBaseUrl = 'http://43.155.162.201/api';
+  static const _flavor = String.fromEnvironment('FLAVOR', defaultValue: 'prod');
+  static const _isDev = _flavor == 'dev';
+  static const _defaultApiBaseUrl = _isDev
+      ? 'http://43.155.162.201/api'
+      : 'http://150.158.79.174/api';
 
   static Future<void> loadRuntimeConfig() async {}
 
-  // --- 统一服务器 IP 配置 ---
+  // --- 统一服务器 IP 配置（根据 flavor 自动切换） ---
   static String get serverIp {
     const v = String.fromEnvironment('SERVER_IP');
     if (v.isNotEmpty) return v;
     if (kIsWeb) return Uri.base.host.isNotEmpty ? Uri.base.host : '127.0.0.1';
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      return '43.155.162.201';
-    }
-    return '43.155.162.201';
+    return _isDev ? '43.155.162.201' : '150.158.79.174';
   }
 
   static String get baseUrl {
